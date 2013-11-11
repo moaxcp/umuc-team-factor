@@ -1,3 +1,4 @@
+package job.server.factor;
 
 import java.math.BigInteger;
 
@@ -9,17 +10,15 @@ import java.math.BigInteger;
  *
  * @author john
  */
-public class TrialDivisionJob extends Job {
+public class TrialDivisionJob extends FactorizationJob {
 
-    private BigInteger number;
     private BigInteger start;
     private BigInteger end;
     private BigInteger leftFactor;
     private BigInteger rightFactor;
 
     public TrialDivisionJob(BigInteger number, BigInteger start, BigInteger end) {
-        super();
-        this.number = number;
+        super(number);
         this.start = start;
         this.end = end;
     }
