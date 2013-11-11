@@ -16,7 +16,7 @@ import job.Job;
 public abstract class FactorizationJob extends Job {
     protected BigInteger number;
     
-    public BigInteger getNumber() {
+    public synchronized BigInteger getNumber() {
         return number;
     }
     

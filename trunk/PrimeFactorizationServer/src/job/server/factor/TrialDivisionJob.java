@@ -75,7 +75,9 @@ public class TrialDivisionJob extends FactorizationJob {
         try {
             //check start is odd
             if (start.mod(BigInteger.valueOf(2)).equals(BigInteger.ZERO)) {
-                start = start.add(BigInteger.ONE);
+                synchronized (this) {
+                    start = start.add(BigInteger.ONE);
+                }
             }
 
             //check all odd
@@ -85,8 +87,10 @@ public class TrialDivisionJob extends FactorizationJob {
                 }
             }
         } finally {
-            run = false;
-            watch.stop();
+            synchronized (this) {
+                run = false;
+                watch.stop();
+            }
         }
     }
 }
