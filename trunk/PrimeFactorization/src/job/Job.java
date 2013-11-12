@@ -16,11 +16,11 @@ import java.util.UUID;
 public abstract class Job implements Runnable {
     private UUID id;
     protected StopWatch watch;
-    protected boolean run;
+    protected JobStatus status;
     
     public Job() {
         id = UUID.randomUUID();
-        run = false;
+        status = JobStatus.NEW;
     }
     
     public synchronized UUID getId() {
@@ -36,6 +36,6 @@ public abstract class Job implements Runnable {
     }
     
     public synchronized void stop() {
-        run = false;
+        status = JobStatus.STOPPED;
     }
 }
