@@ -1,6 +1,7 @@
 package job.server.factor;
 
 import java.math.BigInteger;
+import job.JobStatus;
 
 /*
  * To change this template, choose Tools | Templates
@@ -70,7 +71,7 @@ public class TrialDivisionJob extends FactorizationJob {
 
     @Override
     public void run() {
-        run = true;
+        status = JobStatus.RUNNING;
         watch.start();
         try {
             //check start is odd
@@ -81,14 +82,16 @@ public class TrialDivisionJob extends FactorizationJob {
             }
 
             //check all odd
-            for (BigInteger i = start; run && i.compareTo(end) < 0; i = i.add(BigInteger.valueOf(2))) {
+            for (BigInteger i = start; status == JobStatus.RUNNING && i.compareTo(end) < 0; i = i.add(BigInteger.valueOf(2))) {
                 if (divide(i)) {
                     return;
                 }
             }
         } finally {
             synchronized (this) {
-                run = false;
+                if(status == JobStatus.RUNNING) {
+                    status = JobStatus.COMPLETE;
+                }
                 watch.stop();
             }
         }
