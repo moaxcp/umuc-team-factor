@@ -18,5 +18,10 @@ public abstract class FactorizationManager extends ProcessManager {
     
     public void setNumber(BigInteger number) {
         this.number = number;
+        solution = new FactorTree(number);
+    }
+    
+    public FactorTree getSolution() {
+        return solution;
     }
 }
