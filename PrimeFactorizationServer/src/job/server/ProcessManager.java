@@ -1,13 +1,10 @@
 package job.server;
 
 
-import job.server.JobServer;
 import job.Job;
 import job.client.ClientCallback;
 import java.rmi.RemoteException;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Level;
@@ -79,7 +76,7 @@ public abstract class ProcessManager implements JobServer, Runnable {
         
         for(UUID id : sessions.keySet()) {
             try {
-                sessions.get(id).client.stop();
+                sessions.get(id).client.stopJobs();
             } catch (RemoteException ex) {
                 Logger.getLogger(ProcessManager.class.getName()).log(Level.SEVERE, null, ex);
             }
