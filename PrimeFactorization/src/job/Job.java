@@ -1,6 +1,7 @@
 package job;
 
 
+import java.io.Serializable;
 import java.math.BigInteger;
 import java.util.UUID;
 
@@ -13,7 +14,7 @@ import java.util.UUID;
  *
  * @author john
  */
-public abstract class Job implements Runnable {
+public abstract class Job implements Runnable, Serializable {
     private UUID id;
     protected StopWatch watch;
     protected JobStatus status;
