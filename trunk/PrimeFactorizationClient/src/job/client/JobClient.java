@@ -4,20 +4,24 @@
  */
 package job.client;
 
+import java.io.Serializable;
 import java.rmi.RemoteException;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import job.Job;
+import job.JobStatus;
 import job.server.JobServer;
 
 /**
  *
  * @author john
  */
-public class JobClient implements Runnable, ClientCallback {
+public class JobClient implements Runnable, ClientCallback, Serializable {
 
     private Map<UUID, Thread> threads;
     private Map<UUID, Job> jobs;
@@ -29,12 +33,15 @@ public class JobClient implements Runnable, ClientCallback {
     public JobClient(JobServer server, int maxThreads) {
         this.server = server;
         this.MAX_THREADS = maxThreads;
+        threads = new HashMap<UUID, Thread>();
+        jobs = new HashMap<UUID, Job>();
     }
 
-    private void getSession() {
+    private synchronized void getSession() {
         while (run) {
             try {
                 id = server.getSession(this);
+                Logger.getLogger(JobClient.class.getName()).info("Session id is " + id);
                 return;
             } catch (RemoteException ex) {
                 Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex);
@@ -46,12 +53,18 @@ public class JobClient implements Runnable, ClientCallback {
             }
         }
     }
-    
-    private Job getJob() {
+
+    private synchronized Job getJob() {
         Job j = null;
-        while(run) {
+        while (run) {
             try {
                 j = server.getNextJob(id);
+                if(j != null) {
+                    Logger.getLogger(JobClient.class.getName()).info("Got Job. Job id is " + j.getId());
+                } else {
+                    Logger.getLogger(JobClient.class.getName()).info("Got Job. Job id is null");
+                }
+                return j;
             } catch (RemoteException ex) {
                 Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex);
                 try {
@@ -63,10 +76,11 @@ public class JobClient implements Runnable, ClientCallback {
         }
         return j;
     }
-    
-    private void returnJob(Job job) {
+
+    private synchronized void returnJob(Job job) {
         try {
             server.returnJob(id, job);
+            Logger.getLogger(JobClient.class.getName()).info("Returned Job. Job id is " + job.getId());
         } catch (RemoteException ex) {
             Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex);
             try {
@@ -77,11 +91,12 @@ public class JobClient implements Runnable, ClientCallback {
         }
     }
 
-    private void stopJob(UUID id) throws InterruptedException {
+    private synchronized void stopJob(UUID id) throws InterruptedException {
         Thread t = threads.get(id);
         Job j = jobs.get(id);
         j.stop();
         t.join();
+        Logger.getLogger(JobClient.class.getName()).info("Stopped Job. Job id is " + j.getId());
     }
 
     @Override
@@ -89,17 +104,57 @@ public class JobClient implements Runnable, ClientCallback {
         while (run) {
             getSession();
             while (run) {
-                Job j = getJob();
-                if(j == null) {
-                    try {
-                        Thread.sleep(30 * 1000);
-                        continue;
-                    } catch (InterruptedException ex) {
-                        Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex);
+                synchronized (jobs) {
+                    List<UUID> complete = new ArrayList<UUID>();
+                    for (UUID jobID : jobs.keySet()) {
+                        Job j = jobs.get(jobID);
+                        if (j.getStatus() == JobStatus.COMPLETE) {
+                            complete.add(j.getId());
+                        } else if (j.getStatus() != JobStatus.RUNNING) {
+                            Logger.getLogger(JobClient.class.getName()).severe("Job should be RUNNING but it is " + j.getStatus());
+                        }
+                    }
+                    for(UUID jobID : complete) {
+                        synchronized (threads) {
+                            Thread t = threads.get(jobID);
+                            try {
+                                t.join();
+                            } catch (InterruptedException ex) {
+                                Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex);
+                            }
+                            threads.remove(jobID);
+                            jobs.remove(jobID);
+                        }
                     }
                 }
-                j.run();
-                returnJob(j);
+
+                synchronized (jobs) {
+                    while (jobs.keySet().size() < MAX_THREADS) {
+                        Job j = getJob();
+                        if (j == null) {
+                            try {
+                                Thread.sleep(30 * 1000);
+                                continue;
+                            } catch (InterruptedException ex) {
+                                Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex);
+                            }
+                        } else {
+                            synchronized (threads) {
+                                Thread t = new Thread(j);
+                                jobs.put(j.getId(), j);
+                                threads.put(j.getId(), t);
+                                t.start();
+                                Logger.getLogger(JobClient.class.getName()).info("There are " + threads.size() + " threads.");
+                            }
+                        }
+                    }
+                }
+
+                try {
+                    Thread.sleep(10 * 1000);
+                } catch (InterruptedException ex) {
+                    Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex);
+                }
             }
         }
 
@@ -111,7 +166,7 @@ public class JobClient implements Runnable, ClientCallback {
     }
 
     @Override
-    public void stopJobs() throws RemoteException {
+    public synchronized void stopJobs() throws RemoteException {
         for (UUID id : jobs.keySet()) {
             try {
                 stopJob(id);
@@ -125,7 +180,7 @@ public class JobClient implements Runnable, ClientCallback {
     }
 
     @Override
-    public ClientStatus status() throws RemoteException {
+    public synchronized ClientStatus status() throws RemoteException {
         return new ClientStatus(jobs, id);
     }
 }

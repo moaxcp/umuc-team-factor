@@ -24,5 +24,7 @@ public class JobClientApplication {
         
         Registry registry = LocateRegistry.getRegistry();
         JobServer comp = (JobServer) registry.lookup("JobServer");
+        JobClient client = new JobClient(comp, 7);
+        client.run();
     }
 }
