@@ -14,6 +14,6 @@ import java.rmi.RemoteException;
  * @author john
  */
 public interface ClientCallback extends Remote {
-    void stop() throws RemoteException;
+    void stopJobs() throws RemoteException;
     ClientStatus status() throws RemoteException;
 }
