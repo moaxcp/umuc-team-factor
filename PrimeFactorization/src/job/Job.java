@@ -35,6 +35,10 @@ public abstract class Job implements Runnable {
         return watch.toString();
     }
     
+    public synchronized JobStatus getStatus() {
+        return status;
+    }
+    
     public synchronized void stop() {
         status = JobStatus.STOPPED;
     }
