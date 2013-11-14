@@ -18,7 +18,7 @@ import java.util.UUID;
 public class TrialDivisionManager extends FactorizationManager {
 
     @Override
-    public void getNextJob(UUID id) throws RemoteException {
+    public Job getNextJob(UUID id) throws RemoteException {
         throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
 
