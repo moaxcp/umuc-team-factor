@@ -16,6 +16,7 @@ import java.util.logging.Logger;
 import job.Job;
 import job.JobStatus;
 import job.server.JobServer;
+import job.server.SessionExpiredException;
 
 /**
  *
@@ -44,7 +45,7 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
                 Logger.getLogger(JobClient.class.getName()).info("Session id is " + id);
                 return;
             } catch (RemoteException ex) {
-                Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex);
+                Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, "Could not get session from server. Waiting 30 secs to try again.", ex);
                 try {
                     Thread.sleep(30 * 1000);
                 } catch (InterruptedException ex1) {
@@ -54,19 +55,24 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
         }
     }
 
-    private synchronized Job getJob() {
+    private synchronized Job getJob() throws SessionExpiredException {
         Job j = null;
         while (run) {
             try {
                 j = server.getNextJob(id);
-                if(j != null) {
+                if (j != null) {
                     Logger.getLogger(JobClient.class.getName()).info("Got Job. Job id is " + j.getId());
+                    break;
                 } else {
-                    Logger.getLogger(JobClient.class.getName()).info("Got Job. Job id is null");
+                    Logger.getLogger(JobClient.class.getName()).info("Server returned null. Waiting 10 secs for Job.");
+                    try {
+                        Thread.sleep(10 * 1000);
+                    } catch (InterruptedException ex) {
+                        Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex);
+                    }
                 }
-                return j;
             } catch (RemoteException ex) {
-                Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex);
+                Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, "Could not get Job from server. Waiting 30 secs to reconnect.", ex);
                 try {
                     Thread.sleep(30 * 1000);
                 } catch (InterruptedException ex1) {
@@ -77,16 +83,19 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
         return j;
     }
 
-    private synchronized void returnJob(Job job) {
-        try {
-            server.returnJob(id, job);
-            Logger.getLogger(JobClient.class.getName()).info("Returned Job. Job id is " + job.getId());
-        } catch (RemoteException ex) {
-            Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex);
+    private synchronized void returnJob(Job job) throws SessionExpiredException {
+        while (run) {
             try {
-                Thread.sleep(30 * 1000);
-            } catch (InterruptedException ex1) {
-                Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex1);
+                server.returnJob(id, job);
+                Logger.getLogger(JobClient.class.getName()).info("Returned Job. Job id is " + job.getId());
+                break;
+            } catch (RemoteException ex) {
+                Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, "Could not return Job to server. Waiting 30 secs to try again.", ex);
+                try {
+                    Thread.sleep(30 * 1000);
+                } catch (InterruptedException ex1) {
+                    Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex1);
+                }
             }
         }
     }
@@ -101,10 +110,10 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
 
     @Override
     public void run() {
-        while (run) {
+        session_loop: while (run) {
             getSession();
             while (run) {
-                synchronized (jobs) {
+                synchronized (this) {
                     List<UUID> complete = new ArrayList<UUID>();
                     for (UUID jobID : jobs.keySet()) {
                         Job j = jobs.get(jobID);
@@ -114,46 +123,43 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
                             Logger.getLogger(JobClient.class.getName()).severe("Job should be RUNNING but it is " + j.getStatus());
                         }
                     }
-                    for(UUID jobID : complete) {
-                        synchronized (threads) {
-                            Thread t = threads.get(jobID);
-                            try {
-                                t.join();
-                            } catch (InterruptedException ex) {
-                                Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex);
-                            }
-                            threads.remove(jobID);
-                            jobs.remove(jobID);
+                    for (UUID jobID : complete) {
+                        Thread t = threads.get(jobID);
+                        try {
+                            t.join();
+                        } catch (InterruptedException ex) {
+                            Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex);
                         }
+                        try {
+                            returnJob(jobs.get(jobID));
+                        } catch (SessionExpiredException ex) {
+                            Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex);
+                        }
+                        threads.remove(jobID);
+                        jobs.remove(jobID);
                     }
                 }
 
-                synchronized (jobs) {
+                synchronized (this) {
                     while (jobs.keySet().size() < MAX_THREADS) {
-                        Job j = getJob();
-                        if (j == null) {
+                        Job j;
+                        try {
+                            j = getJob();
+                        } catch (SessionExpiredException ex) {
                             try {
-                                Thread.sleep(30 * 1000);
-                                continue;
-                            } catch (InterruptedException ex) {
                                 Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex);
+                                stopJobs();
+                            } catch (RemoteException ex1) {
+                                Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex1);
                             }
-                        } else {
-                            synchronized (threads) {
-                                Thread t = new Thread(j);
-                                jobs.put(j.getId(), j);
-                                threads.put(j.getId(), t);
-                                t.start();
-                                Logger.getLogger(JobClient.class.getName()).info("There are " + threads.size() + " threads.");
-                            }
+                            continue session_loop;
                         }
+                        Thread t = new Thread(j);
+                        jobs.put(j.getId(), j);
+                        threads.put(j.getId(), t);
+                        t.start();
+                        Logger.getLogger(JobClient.class.getName()).info("There are " + threads.size() + " threads.");
                     }
-                }
-
-                try {
-                    Thread.sleep(10 * 1000);
-                } catch (InterruptedException ex) {
-                    Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex);
                 }
             }
         }
@@ -161,6 +167,8 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
         try {
             server.endSession(id);
         } catch (RemoteException ex) {
+            Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (SessionExpiredException ex) {
             Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
