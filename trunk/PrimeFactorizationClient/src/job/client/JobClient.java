@@ -107,6 +107,10 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
         t.join();
         Logger.getLogger(JobClient.class.getName()).info("Stopped Job. Job id is " + j.getId());
     }
+    
+    public synchronized void stop() {
+        run = false;
+    }
 
     @Override
     public void run() {
