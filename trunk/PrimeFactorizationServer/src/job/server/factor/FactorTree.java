@@ -101,7 +101,7 @@ public class FactorTree implements Serializable {
     
     public BigInteger getNextUnfactoredNumber() {
         Node node = getNextUnfactoredNode(root);
-        if(node != null) {
+        if(node != null && !node.prime) {
             return node.number;
         }
         
