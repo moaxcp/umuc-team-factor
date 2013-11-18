@@ -18,7 +18,7 @@ import java.util.UUID;
  */
 public interface JobServer extends Remote {
     UUID getSession(ClientCallback client) throws RemoteException;
-    void endSession(UUID id) throws RemoteException;
-    Job getNextJob(UUID id) throws RemoteException;
-    void returnJob(UUID id, Job job) throws RemoteException;
+    void endSession(UUID id) throws RemoteException, SessionExpiredException;
+    Job getNextJob(UUID id) throws RemoteException, SessionExpiredException;
+    void returnJob(UUID id, Job job) throws RemoteException, SessionExpiredException;
 }
