@@ -20,7 +20,7 @@ public class FakeJob extends Job implements Serializable {
     public void run() {
         status = JobStatus.RUNNING;
 
-        for (int i = 1; status == JobStatus.RUNNING && i <= 30; i++) {
+        for (int i = 1; status == JobStatus.RUNNING && i <= 10; i++) {
             try {
                 Thread.sleep(1000);
             } catch (InterruptedException ex) {
