@@ -22,6 +22,7 @@ public abstract class Job implements Runnable, Serializable {
     public Job() {
         id = UUID.randomUUID();
         status = JobStatus.NEW;
+        watch = new StopWatch();
     }
     
     public synchronized UUID getId() {

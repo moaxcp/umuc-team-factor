@@ -1,5 +1,7 @@
 package job;
 
+import java.io.Serializable;
+
 /*
  * To change this template, choose Tools | Templates
  * and open the template in the editor.
@@ -9,7 +11,7 @@ package job;
  *
  * @author john
  */
-public class StopWatch {
+public class StopWatch implements Serializable {
 
     protected static final long millisecond = 1000000;
     /**
