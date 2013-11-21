@@ -1,30 +1,205 @@
 package job.server.factor;
 
-
-import job.server.factor.FactorizationManager;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.math.RoundingMode;
+import java.util.ArrayList;
+import java.util.List;
 import job.Job;
-import java.rmi.RemoteException;
 import java.util.UUID;
+import java.util.logging.Logger;
 
 /*
  * To change this template, choose Tools | Templates
  * and open the template in the editor.
  */
-
 /**
  *
  * @author john
  */
 public class TrialDivisionManager extends FactorizationManager {
 
-    @Override
-    public Job getNextJob(UUID id) throws RemoteException {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+    private BigInteger currentNumber;
+    private BigInteger nextStart;
+    private BigInteger currentMax;
+
+    /**
+     * @param currentNumber the currentNumber to set
+     */
+    private synchronized void setCurrentNumber(BigInteger currentNumber) {
+        this.currentNumber = currentNumber;
+        nextStart = BigInteger.valueOf(2);
+        currentMax = sqrt(currentNumber).add(BigInteger.ONE);
+        Logger.getLogger(TrialDivisionManager.class.getName()).info("set currentNumber to " + currentNumber + ", nextStart to " + nextStart + ", currentMax to " + currentMax);
+
+    }
+
+    public synchronized BigDecimal currenNumberPercentComplete() {
+        BigInteger value = nextStart;
+        for (UUID session : sessions.keySet()) {
+            Session s = sessions.get(session);
+            for (UUID job : s.jobs.keySet()) {
+                TrialDivisionJob j = (TrialDivisionJob) s.jobs.get(job);
+                if (j.getStart().compareTo(value) < 0) {
+                    value = j.getStart();
+                }
+            }
+        }
+        for (UUID job : expired.keySet()) {
+            TrialDivisionJob j = (TrialDivisionJob) expired.get(job);
+            if (j.getStart().compareTo(value) < 0) {
+                value = j.getStart();
+            }
+        }
+        return new BigDecimal(value).divide(new BigDecimal(currentMax), RoundingMode.FLOOR).multiply(BigDecimal.valueOf(100));
+
+    }
+
+    //from http://stackoverflow.com/a/11962756
+    private static BigInteger sqrt(BigInteger x) {
+
+        if (x.compareTo(BigInteger.ZERO) < 0) {
+            throw new IllegalArgumentException("Negative argument.");
+        }
+        // square roots of 0 and 1 are trivial and
+        // y == 0 will cause a divide-by-zero exception
+        if (x.equals(BigInteger.ZERO) || x.equals(BigInteger.ONE)) {
+            return x;
+        } // end if
+        BigInteger y;
+        // starting with y = x / 2 avoids magnitude issues with x squared
+        for (y = x.shiftRight(1);
+                y.compareTo(x.divide(y)) > 0;
+                y = ((x.divide(y)).add(y)).shiftRight(1));
+        return y;
+    }
+
+    public synchronized void setNumber(BigInteger number) {
+        super.setNumber(number);
+        setCurrentNumber(number);
     }
 
     @Override
-    public void returnJob(UUID id, Job job) throws RemoteException {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+    public synchronized Job getNextJob(UUID id) {
+
+        //solution found. waiting for next problem.
+        if (solution.isComplete()) {
+            return null;
+        }
+
+        //work on expired jobs
+        if (expired.size() > 0) {
+            Job j = expired.get(expired.keySet().iterator().next());
+            expired.remove(j.getId());
+            addJob(id, j);
+            return j;
+        }
+
+        //all jobs have been issued.
+        if (nextStart.compareTo(currentMax) >= 0) {
+            return null;
+        }
+
+        //create new job with range from nextStart up to currentMax.
+        BigInteger start = nextStart;
+        BigInteger end = nextStart.add(BigInteger.valueOf(1000000));
+        if (end.compareTo(currentMax) > 0) {
+            end = currentMax;
+        }
+        Job j = new TrialDivisionJob(currentNumber, start, end);
+
+        //set next start for next job created.
+        nextStart = end;
+        Logger.getLogger(TrialDivisionManager.class.getName()).info("created " + j);
+        return j;
     }
-    
+
+    private synchronized void setupNextNumber() {
+        stopJobs();
+        BigInteger nextNumber = solution.getNextUnfactoredNumber();
+        while (nextNumber != null && (nextNumber.equals(BigInteger.valueOf(2)) || nextNumber.equals(BigInteger.valueOf(3)))) {
+            solution.setPrime(nextNumber, true);
+            Logger.getLogger(TrialDivisionManager.class.getName()).info("found " + nextNumber + " is prime.");
+            nextNumber = solution.getNextUnfactoredNumber();
+        }
+        if (nextNumber != null) {
+            setCurrentNumber(nextNumber);
+        }
+
+        List<UUID> remove = new ArrayList<UUID>();
+        for (UUID jid : expired.keySet()) {
+            TrialDivisionJob exJob = (TrialDivisionJob) expired.get(jid);
+            if (!exJob.getNumber().equals(currentNumber)) {
+                remove.add(jid);
+            }
+        }
+        for (UUID i : remove) {
+            expired.remove(i);
+        }
+        remove.clear();
+        for (UUID i : sessions.keySet()) {
+            Session s2 = sessions.get(i);
+            for (UUID j : s2.jobs.keySet()) {
+                TrialDivisionJob k = (TrialDivisionJob) s2.jobs.get(j);
+                if (!k.getNumber().equals(currentNumber)) {
+                    remove.add(j);
+                }
+            }
+            for (UUID r : remove) {
+                s2.jobs.remove(r);
+            }
+            remove.clear();
+        }
+    }
+
+    @Override
+    public synchronized void returnJob(UUID id, Job job) {
+        TrialDivisionJob complete = (TrialDivisionJob) job;
+
+        //remove job from session.
+        Session s = sessions.get(id);
+        s.jobs.remove(job.getId());
+
+        //ignore returning old jobs.
+        if (!complete.getNumber().equals(currentNumber)) {
+            Logger.getLogger(TrialDivisionManager.class.getName()).info("returned old job " + complete);
+            return;
+        }
+
+        //figure out how many jobs are out for currentNumber.
+        int issuedJobs = 0;
+        for (UUID i : expired.keySet()) {
+            TrialDivisionJob j = (TrialDivisionJob) expired.get(i);
+            if (currentNumber.equals(j.getNumber())) {
+                issuedJobs++;
+            }
+        }
+        for (UUID i : sessions.keySet()) {
+            Session s2 = sessions.get(i);
+            for (UUID j : s2.jobs.keySet()) {
+                TrialDivisionJob k = (TrialDivisionJob) s2.jobs.get(j);
+                if (currentNumber.equals(k.getNumber())) {
+                    issuedJobs++;
+                }
+            }
+        }
+        Logger.getLogger(TrialDivisionManager.class.getName()).info("there are " + issuedJobs + " jobs issued for " + currentNumber);
+
+        //if a solution has been found add it and start next number or if the
+        //entire range has been checked and no issued jobs remain. The number
+        //must be prime.
+        if (complete.getLeftFactor() != null && complete.getRightFactor() != null) {
+            solution.setFactors(complete.getNumber(), complete.getLeftFactor(), complete.getRightFactor());
+            Logger.getLogger(TrialDivisionManager.class.getName()).info("returned solution " + complete);
+
+            setupNextNumber();
+        } else if (nextStart.equals(currentMax) && issuedJobs == 0) {
+            solution.setPrime(currentNumber, true);
+            Logger.getLogger(TrialDivisionManager.class.getName()).info("returned last job found " + currentNumber + " is prime. " + complete);
+            setupNextNumber();
+        } else {
+            Logger.getLogger(TrialDivisionManager.class.getName()).info("returned job with no solution. " + complete);
+        }
+
+    }
 }
