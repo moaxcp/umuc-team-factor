@@ -1,6 +1,7 @@
 package job.server.factor;
 
 import java.math.BigInteger;
+import java.util.logging.Logger;
 import job.JobStatus;
 
 /*
@@ -25,13 +26,15 @@ public class TrialDivisionJob extends FactorizationJob {
     }
 
     private synchronized boolean divide(BigInteger i) {
+        boolean r = false;
         BigInteger[] divMod = number.divideAndRemainder(i);
         if (divMod[1].equals(BigInteger.ZERO)) {
-            leftFactor = start;
+            leftFactor = i;
             rightFactor = divMod[0];
-            return true;
+            r = true;
         }
-        return false;
+        //System.out.println(i + " divides " + number + " = " + r);
+        return r;
     }
 
     /**
@@ -71,29 +74,49 @@ public class TrialDivisionJob extends FactorizationJob {
 
     @Override
     public void run() {
-        status = JobStatus.RUNNING;
-        watch.start();
+        System.out.println("Starting " + number + " from " + start + " to " + end + ".");
+        synchronized (this) {
+            status = JobStatus.RUNNING;
+            watch.start();
+        }
         try {
             //check start is odd
-            if (start.mod(BigInteger.valueOf(2)).equals(BigInteger.ZERO)) {
-                synchronized (this) {
+            synchronized (this) {
+                if (start.equals(BigInteger.valueOf(2)) && divide(start)) {
+                    return;
+                }
+                if (start.mod(BigInteger.valueOf(2)).equals(BigInteger.ZERO)) {
                     start = start.add(BigInteger.ONE);
                 }
             }
 
             //check all odd
-            for (BigInteger i = start; status == JobStatus.RUNNING && i.compareTo(end) < 0; i = i.add(BigInteger.valueOf(2))) {
+            BigInteger i = null;
+            synchronized (this) {
+                i = start;
+            }
+            for (;; i = i.add(BigInteger.valueOf(2))) {
+                synchronized (this) {
+                    if (status == JobStatus.RUNNING && i.compareTo(end) >= 0) {
+                        return;
+                    }
+                }
                 if (divide(i)) {
                     return;
                 }
             }
         } finally {
             synchronized (this) {
-                if(status == JobStatus.RUNNING) {
+                if (status == JobStatus.RUNNING) {
                     status = JobStatus.COMPLETE;
                 }
                 watch.stop();
             }
         }
+    }
+    
+    @Override
+    public synchronized String toString() {
+        return "TrialDivisionJob " + number + " from " + start + " to " + end + " = " + leftFactor + " * " + rightFactor; 
     }
 }
