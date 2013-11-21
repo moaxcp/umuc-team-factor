@@ -2,13 +2,8 @@ package job;
 
 import java.io.Serializable;
 
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
-
 /**
- *
+ * Uses System.nanoTime() to act like a StopWatch. Useful for timing processes.
  * @author john
  */
 public class StopWatch implements Serializable {
@@ -33,30 +28,63 @@ public class StopWatch implements Serializable {
 
     private long time;
     private long current;
+    private boolean running;
 
+    /**
+     * starts the watch.
+     */
     public synchronized void start() {
         current = System.nanoTime();
+        running = true;
     }
 
+    /**
+     * stops the time.
+     */
     public synchronized void stop() {
-        time += System.nanoTime() - current;
-        start();
+        if(running) {
+            time += System.nanoTime() - current;
+        }
+        running = false;
     }
 
-    public synchronized void restart() {
+    /**
+     * restarts the watch.
+     */
+    public synchronized void reset() {
+        stop();
         time = 0;
         current = System.nanoTime();
     }
 
+    /**
+     * returns the current time elapsed.
+     * @return 
+     */
     public synchronized long getTime() {
+        if(running) {
+            time += System.nanoTime() - current;
+        }
         return time;
     }
 
+    /**
+     * sets the time for the watch.
+     * @param time 
+     */
     public synchronized void setTime(long time) {
         this.time = time;
+        if(running) {
+            current = System.nanoTime();
+        }
     }
 
+    /**
+     * returns a formatted string for the current time elapsed.
+     * @return 
+     */
     public synchronized String toString() {
+        long time = getTime();
         long days = (time / day);
         long hours = (time / hour) % 24;
         long minutes = (time / minute) % 60;
