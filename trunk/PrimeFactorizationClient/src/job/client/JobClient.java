@@ -61,15 +61,11 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
             try {
                 j = server.getNextJob(id);
                 if (j != null) {
-                    Logger.getLogger(JobClient.class.getName()).info("Got Job. Job id is " + j.getId());
+                    Logger.getLogger(JobClient.class.getName()).info("Got Job " + j);
                     break;
                 } else {
-                    Logger.getLogger(JobClient.class.getName()).info("Server returned null. Waiting 10 secs for Job.");
-                    try {
-                        Thread.sleep(10 * 1000);
-                    } catch (InterruptedException ex) {
-                        Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex);
-                    }
+                    Logger.getLogger(JobClient.class.getName()).info("Server returned null job.");
+                    break;
                 }
             } catch (RemoteException ex) {
                 Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, "Could not get Job from server. Waiting 30 secs to reconnect.", ex);
@@ -87,7 +83,7 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
         while (run) {
             try {
                 server.returnJob(id, job);
-                Logger.getLogger(JobClient.class.getName()).info("Returned Job. Job id is " + job.getId());
+                Logger.getLogger(JobClient.class.getName()).info("Returned Job " + job);
                 break;
             } catch (RemoteException ex) {
                 Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, "Could not return Job to server. Waiting 30 secs to try again.", ex);
@@ -100,70 +96,121 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
         }
     }
 
-    private synchronized void stopJob(UUID id) throws InterruptedException {
+    private synchronized void stopJob(UUID id) {
         Thread t = threads.get(id);
         Job j = jobs.get(id);
         j.stop();
-        t.join();
-        Logger.getLogger(JobClient.class.getName()).info("Stopped Job. Job id is " + j.getId());
+        if (t.isAlive()) {
+            try {
+                t.join(1000);
+            } catch (InterruptedException ex) {
+                Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex);
+            }
+            if (t.isAlive()) {
+                Logger.getLogger(JobClient.class.getName()).severe("Thread for \"" + j + "\" is complete but still alive. The Job does not implement COMPLETE correctly.");
+            }
+        }
+        Logger.getLogger(JobClient.class.getName()).info("Stopped Job " + j);
     }
-    
+
     public synchronized void stop() {
         run = false;
     }
 
+    private synchronized boolean fillJobs() {
+        while (jobs.keySet().size() < MAX_THREADS) {
+            Job j;
+            try {
+                j = getJob();
+            } catch (SessionExpiredException ex) {
+                Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex);
+                stopJobs();
+                return true;
+            }
+            if (j != null) {
+                Thread t = new Thread(j);
+                jobs.put(j.getId(), j);
+                threads.put(j.getId(), t);
+                t.start();
+            } else {
+                break;
+            }
+        }
+        Logger.getLogger(JobClient.class.getName()).info("There are " + threads.size() + " threads.");
+        return false;
+    }
+
+    private synchronized List<UUID> statusQuery(JobStatus status) {
+        List<UUID> jobids = new ArrayList<UUID>();
+        for (UUID jobID : jobs.keySet()) {
+            Job j = jobs.get(jobID);
+            if (j.getStatus() == status) {
+                jobids.add(j.getId());
+            }
+        }
+        return jobids;
+    }
+
+    private synchronized void joinThreads(List<UUID> jobids) {
+        for (UUID jobID : jobids) {
+            Thread t = threads.get(jobID);
+            try {
+                if (t.isAlive()) {
+                    t.join(1000);
+                    if (t.isAlive()) {
+                        Logger.getLogger(JobClient.class.getName()).severe("Thread for " + jobID + " is complete but still alive. The Job does not implement COMPLETE correctly.");
+                    }
+                }
+            } catch (InterruptedException ex) {
+                Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex);
+            }
+        }
+    }
+
+    private synchronized boolean returnJobs(List<UUID> jobids) {
+        boolean sessionEnded = false;
+        for (UUID id : jobids) {
+            Job j = jobs.get(id);
+            try {
+                returnJob(j);
+            } catch (SessionExpiredException ex) {
+                sessionEnded = true;
+                Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex);
+            }
+        }
+        return sessionEnded;
+    }
+
     @Override
     public void run() {
-        session_loop: while (run) {
+            stopJobs();
+        session_loop:
+        while (run) {
             getSession();
             while (run) {
+                List<UUID> complete = statusQuery(JobStatus.COMPLETE);
+                joinThreads(complete);
+                boolean sessionEnded = returnJobs(complete);
+                if (sessionEnded) {
+                    continue session_loop;
+                }
                 synchronized (this) {
-                    List<UUID> complete = new ArrayList<UUID>();
-                    for (UUID jobID : jobs.keySet()) {
-                        Job j = jobs.get(jobID);
-                        if (j.getStatus() == JobStatus.COMPLETE) {
-                            complete.add(j.getId());
-                        } else if (j.getStatus() != JobStatus.RUNNING) {
-                            Logger.getLogger(JobClient.class.getName()).severe("Job should be RUNNING but it is " + j.getStatus());
-                        }
-                    }
                     for (UUID jobID : complete) {
-                        Thread t = threads.get(jobID);
-                        try {
-                            t.join();
-                        } catch (InterruptedException ex) {
-                            Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex);
-                        }
-                        try {
-                            returnJob(jobs.get(jobID));
-                        } catch (SessionExpiredException ex) {
-                            Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex);
-                        }
                         threads.remove(jobID);
                         jobs.remove(jobID);
                     }
                 }
 
-                synchronized (this) {
-                    while (jobs.keySet().size() < MAX_THREADS) {
-                        Job j;
-                        try {
-                            j = getJob();
-                        } catch (SessionExpiredException ex) {
-                            try {
-                                Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex);
-                                stopJobs();
-                            } catch (RemoteException ex1) {
-                                Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex1);
-                            }
-                            continue session_loop;
-                        }
-                        Thread t = new Thread(j);
-                        jobs.put(j.getId(), j);
-                        threads.put(j.getId(), t);
-                        t.start();
-                        Logger.getLogger(JobClient.class.getName()).info("There are " + threads.size() + " threads.");
-                    }
+                sessionEnded = fillJobs();
+                if (sessionEnded) {
+                    continue session_loop;
+                }
+
+                try {
+                    Logger.getLogger(JobClient.class.getName()).info("Job loop cycled. Waiting 1 sec.");
+                    Thread.sleep(1 * 1000);
+                } catch (InterruptedException ex) {
+                    Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex);
                 }
             }
         }
@@ -178,21 +225,16 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
     }
 
     @Override
-    public synchronized void stopJobs() throws RemoteException {
+    public synchronized void stopJobs() {
         for (UUID id : jobs.keySet()) {
-            try {
-                stopJob(id);
-            } catch (InterruptedException ex) {
-                Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex);
-                throw new RemoteException("Could not stop thread for Job.", ex);
-            }
+            stopJob(id);
             threads.remove(id);
             jobs.remove(id);
         }
     }
 
     @Override
-    public synchronized ClientStatus status() throws RemoteException {
+    public synchronized ClientStatus status() {
         return new ClientStatus(jobs, id);
     }
 }
