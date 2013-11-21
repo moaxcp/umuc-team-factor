@@ -14,14 +14,14 @@ import job.server.ProcessManager;
  */
 public abstract class FactorizationManager extends ProcessManager {
     private BigInteger number;
-    private FactorTree solution;
+    protected FactorTree solution;
     
-    public void setNumber(BigInteger number) {
+    public synchronized void setNumber(BigInteger number) {
         this.number = number;
         solution = new FactorTree(number);
     }
     
-    public FactorTree getSolution() {
+    public synchronized FactorTree getSolution() {
         return solution;
     }
 }
