@@ -1,7 +1,3 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
 package job.client;
 
 import java.io.Serializable;
@@ -19,7 +15,7 @@ import job.server.JobServer;
 import job.server.SessionExpiredException;
 
 /**
- *
+ * JobClient gets jobs from the JobServer and executes them.
  * @author john
  */
 public class JobClient implements Runnable, ClientCallback, Serializable {
@@ -31,6 +27,11 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
     private boolean run = true;
     private final int MAX_THREADS;
 
+    /**
+     * Creates a JobClient that executes jobs in parallel up to maxThreads.
+     * @param server the job server to use
+     * @param maxThreads how many threads to run.
+     */
     public JobClient(JobServer server, int maxThreads) {
         this.server = server;
         this.MAX_THREADS = maxThreads;
@@ -38,6 +39,10 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
         jobs = new HashMap<UUID, Job>();
     }
 
+    /**
+     * Attempts to get a session from the server. If it is unable to connect it will try every
+     * 30 seconds and continue trying.
+     */
     private synchronized void getSession() {
         while (run) {
             try {
@@ -55,6 +60,12 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
         }
     }
 
+    /**
+     * Attempts to get a Job. If it cannot connect to the server it will try every 30 seconds.
+     * It will not retry if the job returned is null or if SessionExpiredException is thrown.
+     * @return
+     * @throws SessionExpiredException 
+     */
     private synchronized Job getJob() throws SessionExpiredException {
         Job j = null;
         while (run) {
@@ -79,6 +90,12 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
         return j;
     }
 
+    /**
+     * Attempts to connect to the server and return a job. If it cannot connect it will retry every 30 seconds.
+     * It will not attempt if a SessionExpiredException is thrown.
+     * @param job
+     * @throws SessionExpiredException 
+     */
     private synchronized void returnJob(Job job) throws SessionExpiredException {
         while (run) {
             try {
@@ -96,6 +113,11 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
         }
     }
 
+    /**
+     * stops the job that matches id. Attempts to join the thread running the job. If
+     * the thread does not join it indicates Job is not implemented correctly.
+     * @param id 
+     */
     private synchronized void stopJob(UUID id) {
         Thread t = threads.get(id);
         Job j = jobs.get(id);
@@ -113,10 +135,17 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
         Logger.getLogger(JobClient.class.getName()).info("Stopped Job " + j);
     }
 
+    /**
+     * causes the client to stop all jobs and run to return.
+     */
     public synchronized void stop() {
         run = false;
     }
 
+    /**
+     * fills jobs up to MAX_THREADS.
+     * @return 
+     */
     private synchronized boolean fillJobs() {
         while (jobs.keySet().size() < MAX_THREADS) {
             Job j;
@@ -140,6 +169,11 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
         return false;
     }
 
+    /**
+     * returns a List of job ids that match status.
+     * @param status
+     * @return 
+     */
     private synchronized List<UUID> statusQuery(JobStatus status) {
         List<UUID> jobids = new ArrayList<UUID>();
         for (UUID jobID : jobs.keySet()) {
@@ -151,6 +185,10 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
         return jobids;
     }
 
+    /**
+     * Attempts to join all threads running jobids.
+     * @param jobids 
+     */
     private synchronized void joinThreads(List<UUID> jobids) {
         for (UUID jobID : jobids) {
             Thread t = threads.get(jobID);
@@ -167,6 +205,11 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
         }
     }
 
+    /**
+     * returns all jobs in jobids to the JobServer.
+     * @param jobids
+     * @return 
+     */
     private synchronized boolean returnJobs(List<UUID> jobids) {
         boolean sessionEnded = false;
         for (UUID id : jobids) {
@@ -181,11 +224,14 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
         return sessionEnded;
     }
 
+    /**
+     * Manages the JobClient.
+     */
     @Override
     public void run() {
-            stopJobs();
         session_loop:
         while (run) {
+            stopJobs();
             getSession();
             while (run) {
                 List<UUID> complete = statusQuery(JobStatus.COMPLETE);
@@ -224,6 +270,9 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
         }
     }
 
+    /**
+     * stops all jobs and removes them from the client.
+     */
     @Override
     public synchronized void stopJobs() {
         for (UUID id : jobs.keySet()) {
@@ -233,6 +282,10 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
         }
     }
 
+    /**
+     * returns the status of this client.
+     * @return 
+     */
     @Override
     public synchronized ClientStatus status() {
         return new ClientStatus(jobs, id);

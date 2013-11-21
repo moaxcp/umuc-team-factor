@@ -7,12 +7,8 @@ import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import job.server.JobServer;
 
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
 /**
- *
+ * Creates a JobClient and runs it.
  * @author john
  */
 public class JobClientApplication {
