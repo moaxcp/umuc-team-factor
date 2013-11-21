@@ -32,21 +32,27 @@ public class FactorTree implements Serializable {
         }
     }
     
-    private Node find(Node root, BigInteger number) {
+    private List<Node> find(BigInteger number) {
+        List<Node> nodes = new ArrayList<Node>();
+        find(root, number, nodes);
+        return nodes;
+    }
+    
+    private void find(Node root, BigInteger number, List<Node> nodes) {
         if(root == null)
-            return null;
+            return;
         
         if(root.number.equals(number)) {
-            return root;
+            nodes.add(root);
         }
         
-        Node left = find(root.leftFactor, number);
-        if(left != null) {
-            return left;
+        if(root.leftFactor != null) {
+            find(root.leftFactor, number, nodes);
         }
         
-        Node right = find(root.rightFactor, number);
-        return right;
+        if(root.rightFactor != null) {
+            find(root.rightFactor, number, nodes);
+        }
     }
     
     public FactorTree(BigInteger number) {
@@ -58,26 +64,33 @@ public class FactorTree implements Serializable {
     }
     
     public void setFactors(BigInteger number, BigInteger left, BigInteger right) {
-        Node node = find(root, number);
-        
-        if(node != null) {
+        List<Node> nodes = new ArrayList<Node>();
+        find(root, number, nodes);
+        for(Node node : nodes) {
             node.leftFactor = new Node(left);
             node.rightFactor = new Node(right);
         }
     }
     
     public boolean isPrime(BigInteger number) {
-        Node node = find(root, number);
-        return node == null ? false : node.prime;
+        List<Node> nodes = new ArrayList<Node>();
+        find(root, number, nodes);
+        boolean prime = false;
+        for(Node node : nodes) {
+            if(node.prime) {
+                prime = true;
+                break;
+            }
+        }
+        return prime;
     }
     
-    public boolean setPrime(BigInteger number, boolean prime) {
-        Node node = find(root, number);
-        if(node != null) {
+    public void setPrime(BigInteger number, boolean prime) {
+        List<Node> nodes = new ArrayList<Node>();
+        find(root, number, nodes);
+        for(Node node : nodes) {
             node.prime = prime;
-            return true;
         }
-        return false;
     }
     
     public List<BigInteger> getLeaves() {
@@ -101,7 +114,7 @@ public class FactorTree implements Serializable {
     
     public BigInteger getNextUnfactoredNumber() {
         Node node = getNextUnfactoredNode(root);
-        if(node != null && !node.prime) {
+        if(node != null) {
             return node.number;
         }
         
