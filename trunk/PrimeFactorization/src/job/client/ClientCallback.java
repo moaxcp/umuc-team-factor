@@ -6,7 +6,6 @@ import java.rmi.RemoteException;
 /**
  * Remote interface for a ClientCallback. This is used by the JobServer to stop
  * a client from executing jobs and to check the status of the client.
- * @author john
  */
 public interface ClientCallback extends Remote {
     /**

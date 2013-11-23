@@ -15,7 +15,6 @@ import java.util.UUID;
  *      - set to RUNNING when run starts.
  *      - set to COMPLETE when run is finished.
  * Check JobStatus is always RUNNING in all loops and long running processes and return from run if set to STOPPED.
- * @author john
  */
 public abstract class Job implements Runnable, Serializable {
     private UUID id;

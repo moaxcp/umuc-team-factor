@@ -4,7 +4,6 @@ import java.io.Serializable;
 
 /**
  * Uses System.nanoTime() to act like a StopWatch. Useful for timing processes.
- * @author john
  */
 public class StopWatch implements Serializable {
 

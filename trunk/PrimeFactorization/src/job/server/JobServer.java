@@ -12,7 +12,6 @@ import java.util.UUID;
  * 
  * When implementing a new JobServer do not use this interface. Instead extend
  * ProcessManager as it has session management already implemented.
- * @author john
  */
 public interface JobServer extends Remote {
     /**
