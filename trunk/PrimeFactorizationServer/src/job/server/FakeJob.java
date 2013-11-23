@@ -1,7 +1,3 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
 package job.server;
 
 import java.io.Serializable;
@@ -11,8 +7,7 @@ import job.Job;
 import job.JobStatus;
 
 /**
- *
- * @author john
+ * A job that simply counts to 10 every second.
  */
 public class FakeJob extends Job implements Serializable {
 

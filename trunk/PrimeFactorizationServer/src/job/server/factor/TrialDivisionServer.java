@@ -27,12 +27,19 @@ public class TrialDivisionServer {
     private TrialDivisionManager manager;
     private Thread managerThread;
 
+    /**
+     * creates a trial division server.
+     */
     public TrialDivisionServer() {
         manager = new TrialDivisionManager();
         managerThread = new Thread(manager);
 
     }
 
+    /**
+     * adds the server to the rmi registry.
+     * @throws RemoteException 
+     */
     public void init() throws RemoteException {
         if (System.getSecurityManager() == null) {
             System.setSecurityManager(new SecurityManager());
@@ -44,6 +51,10 @@ public class TrialDivisionServer {
         managerThread.start();
     }
 
+    /**
+     * displays the menu to the user and continues to check the status of the number
+     * as the server works on solving it.
+     */
     public void menu() {
         while (true) {
             BufferedReader br = new BufferedReader(new InputStreamReader(System.in));

@@ -1,7 +1,3 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
 package job.server;
 
 import java.rmi.RemoteException;
@@ -15,8 +11,7 @@ import job.Job;
 import job.client.ClientCallback;
 
 /**
- *
- * @author john
+ * A simple JobServer that creates FakeJobs. This server is used to test the client.
  */
 public class FakeServer implements JobServer {
     
