@@ -3,7 +3,6 @@ package job;
 /**
  * Represents the JobStatus.
  * 
- * @author john
  */
 public enum JobStatus {
     /**

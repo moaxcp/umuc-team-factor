@@ -10,7 +10,6 @@ import job.JobStatus;
 
 /**
  * Represents the status of a client.
- * @author john
  */
 public class ClientStatus implements Serializable {
     private Map<UUID, JobStatus> jobStatus;

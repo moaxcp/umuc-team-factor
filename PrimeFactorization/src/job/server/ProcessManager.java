@@ -16,7 +16,6 @@ import java.util.logging.Logger;
  * management. When a session is ended or expired the jobs will be kept
  * for future requests to execute. Session management is in the run() method
  * Any object of this class or subclass should be executed in a thread.
- * @author john
  */
 public abstract class ProcessManager implements JobServer, Runnable {
 
