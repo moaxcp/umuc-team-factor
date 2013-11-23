@@ -16,7 +16,6 @@ import job.server.SessionExpiredException;
 
 /**
  * JobClient gets jobs from the JobServer and executes them.
- * @author john
  */
 public class JobClient implements Runnable, ClientCallback, Serializable {
 

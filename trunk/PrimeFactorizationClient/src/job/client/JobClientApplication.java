@@ -9,7 +9,6 @@ import job.server.JobServer;
 
 /**
  * Creates a JobClient and runs it.
- * @author john
  */
 public class JobClientApplication {
 
