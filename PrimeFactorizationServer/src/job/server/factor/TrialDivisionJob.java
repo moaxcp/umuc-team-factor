@@ -1,16 +1,12 @@
 package job.server.factor;
 
 import java.math.BigInteger;
-import java.util.logging.Logger;
 import job.JobStatus;
 
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
 /**
- *
- * @author john
+ * Performs trial division of a number for a specific range. Once the number is
+ * factored run returns with leftFactor and rightFactor set. If a factor is not 
+ * found run returns without setting leftFactor or rightFactor.
  */
 public class TrialDivisionJob extends FactorizationJob {
 

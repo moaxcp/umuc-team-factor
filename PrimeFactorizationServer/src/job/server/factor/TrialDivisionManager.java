@@ -24,7 +24,7 @@ public class TrialDivisionManager extends FactorizationManager {
     private BigInteger currentMax;
 
     /**
-     * @param currentNumber the currentNumber to set
+     * @param currentNumber the currentNumber to test with TrialDivisionJobs
      */
     private synchronized void setCurrentNumber(BigInteger currentNumber) {
         this.currentNumber = currentNumber;
@@ -34,6 +34,10 @@ public class TrialDivisionManager extends FactorizationManager {
 
     }
 
+    /**
+     * return the percentage complete for the current number.
+     * @return 
+     */
     public synchronized BigDecimal currenNumberPercentComplete() {
         BigInteger value = nextStart;
         for (UUID session : sessions.keySet()) {
@@ -55,6 +59,11 @@ public class TrialDivisionManager extends FactorizationManager {
 
     }
 
+    /**
+     * return the square root of BigInteger x.
+     * @param x
+     * @return 
+     */
     //from http://stackoverflow.com/a/11962756
     private static BigInteger sqrt(BigInteger x) {
 
@@ -74,11 +83,20 @@ public class TrialDivisionManager extends FactorizationManager {
         return y;
     }
 
+    /**
+     * Sets the current problem the server should work on.
+     * @param number 
+     */
     public synchronized void setNumber(BigInteger number) {
         super.setNumber(number);
         setCurrentNumber(number);
     }
 
+    /**
+     * returns the next job to be worked on to a JobClient.
+     * @param id
+     * @return 
+     */
     @Override
     public synchronized Job getNextJob(UUID id) {
 
@@ -114,13 +132,17 @@ public class TrialDivisionManager extends FactorizationManager {
         return j;
     }
 
+    /**
+     * sets up the next next number to be factored. This is called when a solution
+     * is found in returnJob.
+     */
     private synchronized void setupNextNumber() {
         stopJobs();
-        BigInteger nextNumber = solution.getNextUnfactoredNumber();
+        BigInteger nextNumber = solution.getNextUnsolvedNumber();
         while (nextNumber != null && (nextNumber.equals(BigInteger.valueOf(2)) || nextNumber.equals(BigInteger.valueOf(3)))) {
             solution.setPrime(nextNumber, true);
             Logger.getLogger(TrialDivisionManager.class.getName()).info("found " + nextNumber + " is prime.");
-            nextNumber = solution.getNextUnfactoredNumber();
+            nextNumber = solution.getNextUnsolvedNumber();
         }
         if (nextNumber != null) {
             setCurrentNumber(nextNumber);
@@ -152,6 +174,11 @@ public class TrialDivisionManager extends FactorizationManager {
         }
     }
 
+    /**
+     * called by a client when a job is being returned.
+     * @param id
+     * @param job 
+     */
     @Override
     public synchronized void returnJob(UUID id, Job job) {
         TrialDivisionJob complete = (TrialDivisionJob) job;
