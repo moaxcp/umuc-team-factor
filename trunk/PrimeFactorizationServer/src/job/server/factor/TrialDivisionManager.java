@@ -120,7 +120,7 @@ public class TrialDivisionManager extends FactorizationManager {
 
         //create new job with range from nextStart up to currentMax.
         BigInteger start = nextStart;
-        BigInteger end = nextStart.add(BigInteger.valueOf(1000000));
+        BigInteger end = nextStart.add(BigInteger.valueOf(500000000));
         if (end.compareTo(currentMax) > 0) {
             end = currentMax;
         }
