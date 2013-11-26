@@ -28,6 +28,7 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
 
     /**
      * Creates a JobClient that executes jobs in parallel up to maxThreads.
+     *
      * @param server the job server to use
      * @param maxThreads how many threads to run.
      */
@@ -39,8 +40,8 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
     }
 
     /**
-     * Attempts to get a session from the server. If it is unable to connect it will try every
-     * 30 seconds and continue trying.
+     * Attempts to get a session from the server. If it is unable to connect it
+     * will try every 30 seconds and continue trying.
      */
     private synchronized void getSession() {
         while (run) {
@@ -60,10 +61,12 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
     }
 
     /**
-     * Attempts to get a Job. If it cannot connect to the server it will try every 30 seconds.
-     * It will not retry if the job returned is null or if SessionExpiredException is thrown.
+     * Attempts to get a Job. If it cannot connect to the server it will try
+     * every 30 seconds. It will not retry if the job returned is null or if
+     * SessionExpiredException is thrown.
+     *
      * @return
-     * @throws SessionExpiredException 
+     * @throws SessionExpiredException
      */
     private synchronized Job getJob() throws SessionExpiredException {
         Job j = null;
@@ -90,10 +93,12 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
     }
 
     /**
-     * Attempts to connect to the server and return a job. If it cannot connect it will retry every 30 seconds.
-     * It will not attempt if a SessionExpiredException is thrown.
+     * Attempts to connect to the server and return a job. If it cannot connect
+     * it will retry every 30 seconds. It will not attempt if a
+     * SessionExpiredException is thrown.
+     *
      * @param job
-     * @throws SessionExpiredException 
+     * @throws SessionExpiredException
      */
     private synchronized void returnJob(Job job) throws SessionExpiredException {
         while (run) {
@@ -113,9 +118,11 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
     }
 
     /**
-     * stops the job that matches id. Attempts to join the thread running the job. If
-     * the thread does not join it indicates Job is not implemented correctly.
-     * @param id 
+     * stops the job that matches id. Attempts to join the thread running the
+     * job. If the thread does not join it indicates Job is not implemented
+     * correctly.
+     *
+     * @param id
      */
     private synchronized void stopJob(UUID id) {
         Thread t = threads.get(id);
@@ -143,7 +150,8 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
 
     /**
      * fills jobs up to MAX_THREADS.
-     * @return 
+     *
+     * @return
      */
     private synchronized boolean fillJobs() {
         while (jobs.keySet().size() < MAX_THREADS) {
@@ -170,8 +178,9 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
 
     /**
      * returns a List of job ids that match status.
+     *
      * @param status
-     * @return 
+     * @return
      */
     private synchronized List<UUID> statusQuery(JobStatus status) {
         List<UUID> jobids = new ArrayList<UUID>();
@@ -186,7 +195,8 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
 
     /**
      * Attempts to join all threads running jobids.
-     * @param jobids 
+     *
+     * @param jobids
      */
     private synchronized void joinThreads(List<UUID> jobids) {
         for (UUID jobID : jobids) {
@@ -206,8 +216,9 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
 
     /**
      * returns all jobs in jobids to the JobServer.
+     *
      * @param jobids
-     * @return 
+     * @return
      */
     private synchronized boolean returnJobs(List<UUID> jobids) {
         boolean sessionEnded = false;
@@ -250,12 +261,13 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
                 if (sessionEnded) {
                     continue session_loop;
                 }
-
-                try {
-                    Logger.getLogger(JobClient.class.getName()).info("Job loop cycled. Waiting 1 sec.");
-                    Thread.sleep(1 * 1000);
-                } catch (InterruptedException ex) {
-                    Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex);
+                if (complete.size() == 0) {
+                    try {
+                        Logger.getLogger(JobClient.class.getName()).info("Job loop cycled. Waiting 1 sec.");
+                        Thread.sleep(1 * 1000);
+                    } catch (InterruptedException ex) {
+                        Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex);
+                    }
                 }
             }
         }
@@ -283,7 +295,8 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
 
     /**
      * returns the status of this client.
-     * @return 
+     *
+     * @return
      */
     @Override
     public synchronized ClientStatus status() {
