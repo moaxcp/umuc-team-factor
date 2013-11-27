@@ -2,6 +2,7 @@ package job.server.factor;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.math.MathContext;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
@@ -55,7 +56,7 @@ public class TrialDivisionManager extends FactorizationManager {
                 value = j.getStart();
             }
         }
-        return new BigDecimal(value).divide(new BigDecimal(currentMax), RoundingMode.FLOOR).multiply(BigDecimal.valueOf(100));
+        return new BigDecimal(value).divide(new BigDecimal(currentMax), MathContext.DECIMAL32).multiply(BigDecimal.valueOf(100));
 
     }
 
@@ -101,7 +102,7 @@ public class TrialDivisionManager extends FactorizationManager {
     public synchronized Job getNextJob(UUID id) {
 
         //solution found. waiting for next problem.
-        if (solution.isComplete()) {
+        if (solution == null || solution.isComplete()) {
             return null;
         }
 
