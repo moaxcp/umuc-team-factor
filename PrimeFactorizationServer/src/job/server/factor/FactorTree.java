@@ -26,37 +26,39 @@ public class FactorTree implements Serializable {
     }
     
     /**
-     * returns a list of nodes that match a number.
+     * returns the node that match a number.
      * @param number
      * @return 
      */
-    private List<Node> find(BigInteger number) {
-        List<Node> nodes = new ArrayList<Node>();
-        find(root, number, nodes);
-        return nodes;
+    private Node find(BigInteger number) {
+        return find(root, number);
     }
     
     /**
-     * Helper method that recursively finds the nodes that match a number.
+     * Helper method that recursively finds the node that match a number.
      * @param root
      * @param number
-     * @param nodes 
      */
-    private void find(Node root, BigInteger number, List<Node> nodes) {
+    private Node find(Node root, BigInteger number) {
         if(root == null)
-            return;
+            return null;
         
         if(root.number.equals(number)) {
-            nodes.add(root);
+            return root;
         }
         
         if(root.leftFactor != null) {
-            find(root.leftFactor, number, nodes);
+            Node left = find(root.leftFactor, number);
+            if(left != null) {
+                return left;
+            }
         }
         
         if(root.rightFactor != null) {
-            find(root.rightFactor, number, nodes);
+            return find(root.rightFactor, number);
         }
+        
+        return null;
     }
     
     /**
@@ -77,54 +79,64 @@ public class FactorTree implements Serializable {
     
     /**
      * sets the factors for a number. If there are no numbers in the tree
-     * that match number no factors will be set.
+     * that match number no factors will be set and IllegalArgumentException
+     * will be thrown.
      * @param number
      * @param left
      * @param right 
+     * @throws IllegalArgumentException if number is not in the tree.
      */
-    public void setFactors(BigInteger number, BigInteger left, BigInteger right) {
-        List<Node> nodes = new ArrayList<Node>();
-        find(root, number, nodes);
-        for(Node node : nodes) {
-            node.leftFactor = new Node(left);
-            node.rightFactor = new Node(right);
+    public void setFactors(BigInteger number, BigInteger left, BigInteger right) throws IllegalArgumentException {
+        Node n = find(number);
+        if(n == null) {
+            throw new IllegalArgumentException(number + " is not in tree");
         }
+        Node leftNode = find(left);
+        if(leftNode == null) {
+            leftNode = new Node(left);
+        }
+        n.leftFactor = leftNode;
+        
+        //find right node. if left == right the left node is returned.
+        Node rightNode = find(right);
+        if(rightNode == null) {
+            rightNode = new Node(right);
+        }
+        n.rightFactor = rightNode;
     }
     
     /**
      * returns true if the number is marked as prime in this tree.
      * @param number
      * @return 
+     * @throws IllegalArgumentException if number is not in the tree.
      */
-    public boolean isPrime(BigInteger number) {
-        List<Node> nodes = new ArrayList<Node>();
-        find(root, number, nodes);
-        boolean prime = false;
-        for(Node node : nodes) {
-            if(node.prime) {
-                prime = true;
-                break;
-            }
+    public boolean isPrime(BigInteger number) throws IllegalArgumentException {
+        Node node = find(number);
+        if(node == null) {
+            throw new IllegalArgumentException(number + " is not in the tree.");
         }
-        return prime;
+        return node.prime;
     }
     
     /**
      * Sets all numbers that match to prime in the tree.
      * @param number
      * @param prime 
+     * @throws IllegalArgumentException if number is not in tree.
      */
-    public void setPrime(BigInteger number, boolean prime) {
-        List<Node> nodes = new ArrayList<Node>();
-        find(root, number, nodes);
-        for(Node node : nodes) {
-            node.prime = prime;
+    public void setPrime(BigInteger number, boolean prime) throws IllegalArgumentException {
+        Node node = find(number);
+        if(node == null) {
+            throw new IllegalArgumentException(number + " is not in the tree.");
         }
+        node.prime = prime;
     }
     
     /**
      * returns the leaves of the factor tree.
-     * @return 
+     * @return A map containing the leaves and how many times the leaf appears
+     * in the tree.
      */
     public Map<BigInteger, Integer> getLeaves() {
         Map<BigInteger, Integer> factors = new HashMap<BigInteger, Integer>();
