@@ -13,9 +13,9 @@ import java.util.logging.Logger;
 
 /**
  * Partial implementation of a JobServer. ProcessManager implements session
- * management. When a session is ended or expired the jobs will be kept
- * for future requests to execute. Session management is in the run() method
- * Any object of this class or subclass should be executed in a thread.
+ * management. When a session is ended or expired the jobs will be kept for
+ * future requests to execute. Session management is in the run() method Any
+ * object of this class or subclass should be executed in a thread.
  */
 public abstract class ProcessManager implements JobServer, Runnable {
 
@@ -24,11 +24,12 @@ public abstract class ProcessManager implements JobServer, Runnable {
     protected boolean run;
 
     /**
-     * A session tracks every client on this server and the jobs that have
-     * been issued to it. When a session is ended this object is used to stop
-     * the jobs on the server and put them in the expired queue.
+     * A session tracks every client on this server and the jobs that have been
+     * issued to it. When a session is ended this object is used to stop the
+     * jobs on the server and put them in the expired queue.
      */
     protected class Session {
+
         public UUID id;
         public ClientCallback client;
         public Map<UUID, Job> jobs;
@@ -50,6 +51,7 @@ public abstract class ProcessManager implements JobServer, Runnable {
 
     /**
      * Creates a new session for this client and returns the session id.
+     *
      * @param client
      * @return the session id.
      */
@@ -62,9 +64,11 @@ public abstract class ProcessManager implements JobServer, Runnable {
     }
 
     /**
-     * ends the session. All jobs sent to the client are put in the expired queue.
+     * ends the session. All jobs sent to the client are put in the expired
+     * queue.
+     *
      * @param id
-     * @throws SessionExpiredException 
+     * @throws SessionExpiredException
      */
     @Override
     public synchronized void endSession(UUID id) throws SessionExpiredException {
@@ -79,22 +83,23 @@ public abstract class ProcessManager implements JobServer, Runnable {
             throw new SessionExpiredException();
         }
     }
-    
+
     /**
      * adds a job to the session.
+     *
      * @param session
-     * @param job 
+     * @param job
      */
     protected synchronized void addJob(UUID session, Job job) {
         Session s = sessions.get(session);
         s.jobs.put(job.getId(), job);
     }
-    
+
     /**
      * stops jobs on all clients.
      */
     protected synchronized void stopJobs() {
-        for(UUID session : sessions.keySet()) {
+        for (UUID session : sessions.keySet()) {
             Session s = sessions.get(session);
             try {
                 s.client.stopJobs();
@@ -105,7 +110,7 @@ public abstract class ProcessManager implements JobServer, Runnable {
                     Logger.getLogger(ProcessManager.class.getName()).log(Level.SEVERE, null, ex1);
                 }
             }
-            for(UUID jobid : s.jobs.keySet()) {
+            for (UUID jobid : s.jobs.keySet()) {
                 Job j = s.jobs.get(jobid);
                 expired.put(jobid, j);
             }
@@ -120,7 +125,8 @@ public abstract class ProcessManager implements JobServer, Runnable {
     }
 
     /**
-     * Checks sessions every 5 minutes and expires clients that are unresponsive.
+     * Checks sessions every 5 minutes and expires clients that are
+     * unresponsive.
      */
     @Override
     public void run() {
@@ -138,7 +144,7 @@ public abstract class ProcessManager implements JobServer, Runnable {
                         Logger.getLogger(ProcessManager.class.getName()).log(Level.SEVERE, null, ex);
                     }
                 }
-                for(UUID id : endSessions) {
+                for (UUID id : endSessions) {
                     try {
                         endSession(id);
                     } catch (SessionExpiredException ex) {
@@ -153,11 +159,13 @@ public abstract class ProcessManager implements JobServer, Runnable {
             }
         }
 
-        for (UUID id : sessions.keySet()) {
-            try {
-                sessions.get(id).client.stopJobs();
-            } catch (RemoteException ex) {
-                Logger.getLogger(ProcessManager.class.getName()).log(Level.SEVERE, null, ex);
+        synchronized (this) {
+            for (UUID id : sessions.keySet()) {
+                try {
+                    sessions.get(id).client.stopJobs();
+                } catch (RemoteException ex) {
+                    Logger.getLogger(ProcessManager.class.getName()).log(Level.SEVERE, null, ex);
+                }
             }
         }
     }
