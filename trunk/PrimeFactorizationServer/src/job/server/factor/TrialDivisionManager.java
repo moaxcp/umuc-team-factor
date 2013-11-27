@@ -34,6 +34,10 @@ public class TrialDivisionManager extends FactorizationManager {
         Logger.getLogger(TrialDivisionManager.class.getName()).info("set currentNumber to " + currentNumber + ", nextStart to " + nextStart + ", currentMax to " + currentMax);
 
     }
+    
+    public synchronized BigInteger getCurrentNumber() {
+        return currentNumber;
+    }
 
     /**
      * return the percentage complete for the current number.

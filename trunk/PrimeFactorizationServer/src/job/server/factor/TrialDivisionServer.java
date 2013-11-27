@@ -14,6 +14,7 @@ import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 import java.text.NumberFormat;
+import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import job.server.JobServer;
@@ -38,7 +39,8 @@ public class TrialDivisionServer {
 
     /**
      * adds the server to the rmi registry.
-     * @throws RemoteException 
+     *
+     * @throws RemoteException
      */
     public void init() throws RemoteException {
         if (System.getSecurityManager() == null) {
@@ -52,8 +54,8 @@ public class TrialDivisionServer {
     }
 
     /**
-     * displays the menu to the user and continues to check the status of the number
-     * as the server works on solving it.
+     * displays the menu to the user and continues to check the status of the
+     * number as the server works on solving it.
      */
     public void menu() {
         while (true) {
@@ -71,13 +73,17 @@ public class TrialDivisionServer {
                     Logger.getLogger(TrialDivisionServer.class.getName()).log(Level.SEVERE, null, ex);
                 }
                 BigDecimal percent = manager.currenNumberPercentComplete();
-                while (!manager.getSolution().isComplete()) {
-
-                    BigDecimal next = manager.currenNumberPercentComplete();
-                    if (!percent.equals(next)) {
-                        percent = next;
-                        System.out.println("Working... " + manager.currenNumberPercentComplete() + "%");
-                        System.out.println("factors so far: " + manager.getSolution().getLeaves());
+                while (true) {
+                    synchronized (manager) {
+                        if (manager.getSolution().isComplete()) {
+                            break;
+                        }
+                        BigDecimal next = manager.currenNumberPercentComplete();
+                        if (!percent.equals(next)) {
+                            percent = next;
+                            System.out.println("Working on " + manager.getCurrentNumber() + "... " + manager.currenNumberPercentComplete() + "%");
+                            System.out.println("factors so far: " + manager.getSolution().getLeaves());
+                        }
                     }
                     try {
                         Thread.sleep(500);
@@ -85,7 +91,16 @@ public class TrialDivisionServer {
                         Logger.getLogger(TrialDivisionServer.class.getName()).log(Level.SEVERE, null, ex);
                     }
                 }
-                System.out.println("Factors for " + manager.getSolution().getNumber() + " are: " + manager.getSolution().getLeaves());
+                synchronized(manager) {
+                    FactorTree solution = manager.getSolution();
+                    Map<BigInteger, Integer> leaves = solution.getLeaves();
+                    System.out.println("Factors for " +solution.getNumber() + " are: " + leaves);
+                    for(BigInteger bi : leaves.keySet()) {
+                        if(solution.isPrime(bi)) {
+                            System.out.println(bi + " is prime.");
+                        }
+                    }
+                }
             }
         }
     }
