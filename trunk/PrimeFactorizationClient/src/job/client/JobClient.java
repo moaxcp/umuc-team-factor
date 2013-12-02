@@ -1,7 +1,10 @@
 package job.client;
 
-import java.io.Serializable;
+import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
+import java.rmi.server.UnicastRemoteObject;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -17,7 +20,7 @@ import job.server.SessionExpiredException;
 /**
  * JobClient gets jobs from the JobServer and executes them.
  */
-public class JobClient implements Runnable, ClientCallback, Serializable {
+public class JobClient extends UnicastRemoteObject implements Runnable, ClientCallback {
 
     private Map<UUID, Thread> threads;
     private Map<UUID, Job> jobs;
@@ -25,6 +28,23 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
     private JobServer server;
     private boolean run = true;
     private final int MAX_THREADS;
+    private boolean stopJobs = false;
+
+    private synchronized boolean isStopJobs() {
+        return stopJobs;
+    }
+
+    private synchronized boolean isRun() {
+        return run;
+    }
+
+    private synchronized void setStopJobs(boolean stop) {
+        this.stopJobs = stop;
+    }
+
+    public JobClient() throws RemoteException {
+        this(1);
+    }
 
     /**
      * Creates a JobClient that executes jobs in parallel up to maxThreads.
@@ -32,11 +52,23 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
      * @param server the job server to use
      * @param maxThreads how many threads to run.
      */
-    public JobClient(JobServer server, int maxThreads) {
-        this.server = server;
+    public JobClient(int maxThreads) throws RemoteException {
+        setupServer();
         this.MAX_THREADS = maxThreads;
         threads = new HashMap<UUID, Thread>();
         jobs = new HashMap<UUID, Job>();
+    }
+
+    private synchronized void setupServer() {
+        try {
+            Registry registry = LocateRegistry.getRegistry();
+            server = (JobServer) registry.lookup("JobServer");
+            return;
+        } catch (RemoteException ex) {
+            Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (NotBoundException ex) {
+            Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex);
+        }
     }
 
     /**
@@ -56,6 +88,7 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
                 } catch (InterruptedException ex1) {
                     Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex1);
                 }
+                setupServer();
             }
         }
     }
@@ -87,6 +120,7 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
                 } catch (InterruptedException ex1) {
                     Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex1);
                 }
+                setupServer();
             }
         }
         return j;
@@ -114,6 +148,7 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
                     Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex1);
                 }
             }
+            setupServer();
         }
     }
 
@@ -240,34 +275,50 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
     @Override
     public void run() {
         session_loop:
-        while (run) {
-            stopJobs();
-            getSession();
-            while (run) {
-                List<UUID> complete = statusQuery(JobStatus.COMPLETE);
-                joinThreads(complete);
-                boolean sessionEnded = returnJobs(complete);
-                if (sessionEnded) {
-                    continue session_loop;
+        while (isRun()) {
+            synchronized (this) {
+                if (!jobs.isEmpty()) {
+                    realStopJobs();
                 }
+            }
+            getSession();
+            boolean sleep = true;
+            while (isRun()) {
                 synchronized (this) {
+                    List<UUID> complete = statusQuery(JobStatus.COMPLETE);
+                    joinThreads(complete);
+                    
+                    //cannot be synchronized when calling.
+                    boolean sessionEnded = returnJobs(complete);
+                    if (sessionEnded) {
+                        continue session_loop;
+                    }
+
                     for (UUID jobID : complete) {
                         threads.remove(jobID);
                         jobs.remove(jobID);
                     }
-                }
 
-                sessionEnded = fillJobs();
-                if (sessionEnded) {
-                    continue session_loop;
+
+                    sessionEnded = fillJobs();
+                    if (sessionEnded) {
+                        continue session_loop;
+                    }
+                    if (complete.isEmpty()) {
+                        sleep = true;
+                    } else {
+                        sleep = false;
+                    }
                 }
-                if (complete.size() == 0) {
+                if (sleep) {
                     try {
                         Logger.getLogger(JobClient.class.getName()).info("Job loop cycled. Waiting 1 sec.");
                         Thread.sleep(1 * 1000);
                     } catch (InterruptedException ex) {
                         Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex);
                     }
+                } else {
+                    Logger.getLogger(JobClient.class.getName()).info("Job loop cycled. Not waiting.");
                 }
             }
         }
@@ -281,16 +332,22 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
         }
     }
 
-    /**
-     * stops all jobs and removes them from the client.
-     */
-    @Override
-    public synchronized void stopJobs() {
+    private synchronized void realStopJobs() {
+        Logger.getLogger(JobClient.class.getName()).info("Stopping jobs...");
         for (UUID id : jobs.keySet()) {
             stopJob(id);
             threads.remove(id);
             jobs.remove(id);
         }
+
+    }
+
+    /**
+     * stops all jobs and removes them from the client.
+     */
+    @Override
+    public synchronized void stopJobs() {
+        stopJobs = true;
     }
 
     /**
@@ -300,6 +357,8 @@ public class JobClient implements Runnable, ClientCallback, Serializable {
      */
     @Override
     public synchronized ClientStatus status() {
-        return new ClientStatus(jobs, id);
+        ClientStatus status = new ClientStatus(id, jobs);
+        Logger.getLogger(JobClient.class.getName()).info("returning status " + status);
+        return status;
     }
 }
