@@ -11,11 +11,17 @@ import job.JobStatus;
  */
 public class FakeJob extends Job implements Serializable {
 
+    private int count;
+
+    public FakeJob(int count) {
+        this.count = count;
+    }
+
     @Override
     public void run() {
         status = JobStatus.RUNNING;
 
-        for (int i = 1; status == JobStatus.RUNNING && i <= 10; i++) {
+        for (int i = 1; status == JobStatus.RUNNING && i <= count; i++) {
             try {
                 Thread.sleep(1000);
             } catch (InterruptedException ex) {
@@ -24,6 +30,8 @@ public class FakeJob extends Job implements Serializable {
             System.out.println(i + "...");
         }
 
-        status = JobStatus.COMPLETE;
+        if (status == JobStatus.RUNNING) {
+            status = JobStatus.COMPLETE;
+        }
     }
 }
