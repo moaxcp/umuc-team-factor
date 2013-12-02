@@ -32,8 +32,6 @@ public class TrialDivisionServer {
      * creates a trial division server.
      */
     public TrialDivisionServer() {
-        manager = new TrialDivisionManager();
-        managerThread = new Thread(manager);
 
     }
 
@@ -43,6 +41,8 @@ public class TrialDivisionServer {
      * @throws RemoteException
      */
     public void init() throws RemoteException {
+        manager = new TrialDivisionManager();
+        managerThread = new Thread(manager);
         if (System.getSecurityManager() == null) {
             System.setSecurityManager(new SecurityManager());
         }
@@ -69,8 +69,10 @@ public class TrialDivisionServer {
                     manager.setNumber(number);
                 } catch (IOException ex) {
                     Logger.getLogger(TrialDivisionServer.class.getName()).log(Level.SEVERE, null, ex);
+                    continue;
                 } catch (NumberFormatException ex) {
                     Logger.getLogger(TrialDivisionServer.class.getName()).log(Level.SEVERE, null, ex);
+                    continue;
                 }
                 BigDecimal percent = manager.currenNumberPercentComplete();
                 while (true) {
@@ -91,12 +93,12 @@ public class TrialDivisionServer {
                         Logger.getLogger(TrialDivisionServer.class.getName()).log(Level.SEVERE, null, ex);
                     }
                 }
-                synchronized(manager) {
+                synchronized (manager) {
                     FactorTree solution = manager.getSolution();
                     Map<BigInteger, Integer> leaves = solution.getLeaves();
-                    System.out.println("Factors for " +solution.getNumber() + " are: " + leaves);
-                    for(BigInteger bi : leaves.keySet()) {
-                        if(solution.isPrime(bi)) {
+                    System.out.println("Factors for " + solution.getNumber() + " are: " + leaves);
+                    for (BigInteger bi : leaves.keySet()) {
+                        if (solution.isPrime(bi)) {
                             System.out.println(bi + " is prime.");
                         }
                     }
@@ -105,9 +107,21 @@ public class TrialDivisionServer {
         }
     }
 
-    public static void main(String... args) throws RemoteException {
+    public static void main(String... args) {
         TrialDivisionServer server = new TrialDivisionServer();
-        server.init();
-        server.menu();
+        while (true) {
+            try {
+                server.init();
+                server.menu();
+            } catch (RemoteException ex) {
+                Logger.getLogger(TrialDivisionServer.class.getName()).log(Level.SEVERE, null, ex);
+            }
+            Logger.getLogger(TrialDivisionServer.class.getName()).info("Attempting to connect to registry again in 10 seconds.");
+            try {
+                Thread.sleep(10 * 1000);
+            } catch (InterruptedException ex) {
+                Logger.getLogger(TrialDivisionServer.class.getName()).log(Level.SEVERE, null, ex);
+            }
+        }
     }
 }

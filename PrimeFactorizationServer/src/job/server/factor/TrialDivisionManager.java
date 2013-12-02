@@ -9,6 +9,7 @@ import java.util.List;
 import job.Job;
 import java.util.UUID;
 import java.util.logging.Logger;
+import job.server.SessionExpiredException;
 
 /*
  * To change this template, choose Tools | Templates
@@ -103,10 +104,17 @@ public class TrialDivisionManager extends FactorizationManager {
      * @return 
      */
     @Override
-    public synchronized Job getNextJob(UUID id) {
+    public synchronized Job getNextJob(UUID id) throws SessionExpiredException {
+        
+        Session s = sessions.get(id);
+        if(s == null) {
+            Logger.getLogger(TrialDivisionManager.class.getName()).info("session does not exist " + id);
+            throw new SessionExpiredException("session does not exist " + id);
+        }
 
         //solution found. waiting for next problem.
         if (solution == null || solution.isComplete()) {
+            Logger.getLogger(TrialDivisionManager.class.getName()).info("waiting for next problem.");
             return null;
         }
 
@@ -115,11 +123,13 @@ public class TrialDivisionManager extends FactorizationManager {
             Job j = expired.get(expired.keySet().iterator().next());
             expired.remove(j.getId());
             addJob(id, j);
+            Logger.getLogger(TrialDivisionManager.class.getName()).info("Using expired job. " + j);
             return j;
         }
 
         //all jobs have been issued.
         if (nextStart.compareTo(currentMax) >= 0) {
+            Logger.getLogger(TrialDivisionManager.class.getName()).info("All Jobs have been issued.");
             return null;
         }
 
@@ -142,7 +152,6 @@ public class TrialDivisionManager extends FactorizationManager {
      * is found in returnJob.
      */
     private synchronized void setupNextNumber() {
-        stopJobs();
         BigInteger nextNumber = solution.getNextUnsolvedNumber();
         while (nextNumber != null && (nextNumber.equals(BigInteger.valueOf(2)) || nextNumber.equals(BigInteger.valueOf(3)))) {
             solution.setPrime(nextNumber, true);
@@ -185,11 +194,15 @@ public class TrialDivisionManager extends FactorizationManager {
      * @param job 
      */
     @Override
-    public synchronized void returnJob(UUID id, Job job) {
+    public synchronized void returnJob(UUID id, Job job) throws SessionExpiredException {
         TrialDivisionJob complete = (TrialDivisionJob) job;
 
         //remove job from session.
         Session s = sessions.get(id);
+        if(s == null) {
+            Logger.getLogger(TrialDivisionManager.class.getName()).info("session does not exist " + id);
+            throw new SessionExpiredException("session does not exist " + id);
+        }
         s.jobs.remove(job.getId());
 
         //ignore returning old jobs.
@@ -223,11 +236,12 @@ public class TrialDivisionManager extends FactorizationManager {
         if (complete.getLeftFactor() != null && complete.getRightFactor() != null) {
             solution.setFactors(complete.getNumber(), complete.getLeftFactor(), complete.getRightFactor());
             Logger.getLogger(TrialDivisionManager.class.getName()).info("returned solution " + complete);
-
+            stopJobs();
             setupNextNumber();
         } else if (nextStart.equals(currentMax) && issuedJobs == 0) {
             solution.setPrime(currentNumber, true);
             Logger.getLogger(TrialDivisionManager.class.getName()).info("returned last job found " + currentNumber + " is prime. " + complete);
+            stopJobs();
             setupNextNumber();
         } else {
             Logger.getLogger(TrialDivisionManager.class.getName()).info("returned job with no solution. " + complete);
