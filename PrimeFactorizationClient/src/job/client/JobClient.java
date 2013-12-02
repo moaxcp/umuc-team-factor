@@ -59,10 +59,13 @@ public class JobClient extends UnicastRemoteObject implements Runnable, ClientCa
         jobs = new HashMap<UUID, Job>();
     }
 
-    private synchronized void setupServer() {
+    private void setupServer() {
         try {
             Registry registry = LocateRegistry.getRegistry();
-            server = (JobServer) registry.lookup("JobServer");
+            JobServer s = (JobServer) registry.lookup("JobServer");
+            synchronized (this) {
+                server = s;
+            }
             return;
         } catch (RemoteException ex) {
             Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex);
@@ -75,10 +78,13 @@ public class JobClient extends UnicastRemoteObject implements Runnable, ClientCa
      * Attempts to get a session from the server. If it is unable to connect it
      * will try every 30 seconds and continue trying.
      */
-    private synchronized void getSession() {
-        while (run) {
+    private void getSession() {
+        while (isRun()) {
             try {
-                id = server.getSession(this);
+                UUID sid = server.getSession(this);
+                synchronized (this) {
+                    id = sid;
+                }
                 Logger.getLogger(JobClient.class.getName()).info("Session id is " + id);
                 return;
             } catch (RemoteException ex) {
@@ -101,9 +107,9 @@ public class JobClient extends UnicastRemoteObject implements Runnable, ClientCa
      * @return
      * @throws SessionExpiredException
      */
-    private synchronized Job getJob() throws SessionExpiredException {
+    private Job getJob() throws SessionExpiredException {
         Job j = null;
-        while (run) {
+        while (isRun()) {
             try {
                 j = server.getNextJob(id);
                 if (j != null) {
@@ -134,8 +140,8 @@ public class JobClient extends UnicastRemoteObject implements Runnable, ClientCa
      * @param job
      * @throws SessionExpiredException
      */
-    private synchronized void returnJob(Job job) throws SessionExpiredException {
-        while (run) {
+    private void returnJob(Job job) throws SessionExpiredException {
+        while (isRun()) {
             try {
                 server.returnJob(id, job);
                 Logger.getLogger(JobClient.class.getName()).info("Returned Job " + job);
@@ -165,7 +171,7 @@ public class JobClient extends UnicastRemoteObject implements Runnable, ClientCa
         j.stop();
         if (t.isAlive()) {
             try {
-                t.join(1000);
+                t.join(5 * 1000);
             } catch (InterruptedException ex) {
                 Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex);
             }
@@ -255,10 +261,9 @@ public class JobClient extends UnicastRemoteObject implements Runnable, ClientCa
      * @param jobids
      * @return
      */
-    private synchronized boolean returnJobs(List<UUID> jobids) {
+    private boolean returnJobs(List<Job> jobs) {
         boolean sessionEnded = false;
-        for (UUID id : jobids) {
-            Job j = jobs.get(id);
+        for (Job j : jobs) {
             try {
                 returnJob(j);
             } catch (SessionExpiredException ex) {
@@ -284,31 +289,39 @@ public class JobClient extends UnicastRemoteObject implements Runnable, ClientCa
             getSession();
             boolean sleep = true;
             while (isRun()) {
+                List<Job> completeJobs = new ArrayList<Job>();
+                List<UUID> complete = statusQuery(JobStatus.COMPLETE);
+                joinThreads(complete);
                 synchronized (this) {
-                    List<UUID> complete = statusQuery(JobStatus.COMPLETE);
-                    joinThreads(complete);
-                    
-                    //cannot be synchronized when calling.
-                    boolean sessionEnded = returnJobs(complete);
-                    if (sessionEnded) {
-                        continue session_loop;
-                    }
-
                     for (UUID jobID : complete) {
+                        completeJobs.add(jobs.get(jobID));
                         threads.remove(jobID);
                         jobs.remove(jobID);
                     }
+                }
+
+                //cannot be synchronized when calling.
+                boolean sessionEnded = returnJobs(completeJobs);
+                if (sessionEnded) {
+                    continue session_loop;
+                }
+
+                synchronized (this) {
+                    if (stopJobs) {
+                        realStopJobs();
+                        stopJobs = false;
+                    }
+                }
 
 
-                    sessionEnded = fillJobs();
-                    if (sessionEnded) {
-                        continue session_loop;
-                    }
-                    if (complete.isEmpty()) {
-                        sleep = true;
-                    } else {
-                        sleep = false;
-                    }
+                sessionEnded = fillJobs();
+                if (sessionEnded) {
+                    continue session_loop;
+                }
+                if (complete.isEmpty()) {
+                    sleep = true;
+                } else {
+                    sleep = false;
                 }
                 if (sleep) {
                     try {
@@ -336,10 +349,9 @@ public class JobClient extends UnicastRemoteObject implements Runnable, ClientCa
         Logger.getLogger(JobClient.class.getName()).info("Stopping jobs...");
         for (UUID id : jobs.keySet()) {
             stopJob(id);
-            threads.remove(id);
-            jobs.remove(id);
         }
-
+        threads.clear();
+        jobs.clear();
     }
 
     /**
