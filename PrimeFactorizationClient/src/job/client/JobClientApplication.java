@@ -2,6 +2,7 @@ package job.client;
 
 
 import java.rmi.NotBoundException;
+import java.rmi.RMISecurityManager;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
@@ -12,14 +13,12 @@ import job.server.JobServer;
  */
 public class JobClientApplication {
 
-    public static void main(String... args) throws RemoteException, NotBoundException {
+    public static void main(String... args) throws RemoteException {
         if (System.getSecurityManager() == null) {
-            System.setSecurityManager(new SecurityManager());
+            System.setSecurityManager(new RMISecurityManager());
         }
         
-        Registry registry = LocateRegistry.getRegistry();
-        JobServer comp = (JobServer) registry.lookup("JobServer");
-        JobClient client = new JobClient(comp, 7);
+        JobClient client = new JobClient(7);
         client.run();
     }
 }
