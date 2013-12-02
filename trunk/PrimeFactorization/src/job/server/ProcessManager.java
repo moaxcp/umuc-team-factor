@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import job.client.ClientStatus;
 
 /**
  * Partial implementation of a JobServer. ProcessManager implements session
@@ -102,17 +103,18 @@ public abstract class ProcessManager implements JobServer, Runnable {
         for (UUID session : sessions.keySet()) {
             Session s = sessions.get(session);
             try {
+                Logger.getLogger(ProcessManager.class.getName()).info("Stopping jobs for " + session);
                 s.client.stopJobs();
+                for (UUID jobid : s.jobs.keySet()) {
+                    Job j = s.jobs.get(jobid);
+                    expired.put(jobid, j);
+                }
             } catch (RemoteException ex) {
                 try {
                     endSession(session);
                 } catch (SessionExpiredException ex1) {
                     Logger.getLogger(ProcessManager.class.getName()).log(Level.SEVERE, null, ex1);
                 }
-            }
-            for (UUID jobid : s.jobs.keySet()) {
-                Job j = s.jobs.get(jobid);
-                expired.put(jobid, j);
             }
         }
     }
@@ -138,7 +140,11 @@ public abstract class ProcessManager implements JobServer, Runnable {
                 for (UUID id : sessions.keySet()) {
                     ClientCallback c = sessions.get(id).client;
                     try {
-                        c.status();
+                        ClientStatus status = c.status();
+                        Logger.getLogger(ProcessManager.class.getName()).info("got client status for " + id + ": " + status.getSessionID() + " -" + status.getJobStatus());
+                        if(status.getSessionID() == null || !status.getSessionID().equals(id)) {
+                            endSessions.add(id);
+                        }
                     } catch (Exception ex) {
                         endSessions.add(id);
                         Logger.getLogger(ProcessManager.class.getName()).log(Level.SEVERE, null, ex);
@@ -152,6 +158,7 @@ public abstract class ProcessManager implements JobServer, Runnable {
                     }
                 }
             }
+            Logger.getLogger(ProcessManager.class.getName()).info("ProcessManager loop cycled. Waiting 5 minutes.");
             try {
                 Thread.sleep(5 * 60 * 1000);
             } catch (InterruptedException ex) {
