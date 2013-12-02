@@ -12,15 +12,15 @@ import job.JobStatus;
  * Represents the status of a client.
  */
 public class ClientStatus implements Serializable {
-    private Map<UUID, JobStatus> jobStatus;
     private UUID session;
+    private Map<UUID, JobStatus> jobStatus;
     
     /**
      * Creates a ClientStatus.
      * @param jobs
      * @param session 
      */
-    public ClientStatus(Map<UUID, Job> jobs, UUID session) {
+    public ClientStatus(UUID session, Map<UUID, Job> jobs) {
         this.session = session;
         jobStatus = new HashMap<UUID, JobStatus>();
         for(UUID id : jobs.keySet()) {
