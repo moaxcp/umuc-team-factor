@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.rmi.RMISecurityManager;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
@@ -44,7 +45,7 @@ public class TrialDivisionServer {
         manager = new TrialDivisionManager();
         managerThread = new Thread(manager);
         if (System.getSecurityManager() == null) {
-            System.setSecurityManager(new SecurityManager());
+            System.setSecurityManager(new RMISecurityManager());
         }
 
         JobServer stub = (JobServer) UnicastRemoteObject.exportObject(manager, 0);
