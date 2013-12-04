@@ -82,16 +82,18 @@ public class TrialDivisionJob extends FactorizationJob {
         //check start is odd
         synchronized (this) {
             if (start.equals(BigInteger.valueOf(2)) && divide(start)) {
+                status = JobStatus.COMPLETE;
+                watch.stop();
                 return;
-            }
-            if (start.mod(BigInteger.valueOf(2)).equals(BigInteger.ZERO)) {
-                start = start.add(BigInteger.ONE);
             }
         }
 
         //check all odd
         BigInteger i = null;
         synchronized (this) {
+            if (start.mod(BigInteger.valueOf(2)).equals(BigInteger.ZERO)) {
+                start = start.add(BigInteger.ONE);
+            }
             i = start;
         }
         for (;; i = i.add(BigInteger.valueOf(2))) {
