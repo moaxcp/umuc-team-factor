@@ -5,6 +5,10 @@
 package job.server.factor;
 
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.math.BigDecimal;
@@ -16,6 +20,7 @@ import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 import java.text.NumberFormat;
 import java.util.Map;
+import java.util.Properties;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import job.server.JobServer;
@@ -28,12 +33,41 @@ public class TrialDivisionServer {
 
     private TrialDivisionManager manager;
     private Thread managerThread;
+    private String registryHost;
+    private int registryPort;
+    private String registryServerObject;
+    private long loopCycleWait;
+    
+    private static final Properties defaults;
+    
+    static {
+        defaults = new Properties();
+        defaults.setProperty("registryHost", "localhost");
+        defaults.setProperty("registryPort", "1099");
+        defaults.setProperty("registryServerObject", "JobServer");
+        defaults.setProperty("loopCycleWait", Long.valueOf(5 * 60 * 1000).toString());
+    }
+    
+    public static Properties getDefaultProperties() {
+        return defaults;
+    }
+    
+    private void useProperties(Properties properties) {
+        registryHost = properties.getProperty("registryHost");
+        registryPort = Integer.valueOf(properties.getProperty("registryPort"));
+        registryServerObject = properties.getProperty("registryServerObject");
+        loopCycleWait = Long.valueOf(properties.getProperty("loopCycleWait"));
+    }
 
     /**
      * creates a trial division server.
      */
     public TrialDivisionServer() {
-
+        useProperties(defaults);
+    }
+    
+    public TrialDivisionServer(Properties properties) {
+        useProperties(properties);
     }
 
     /**
@@ -43,14 +77,15 @@ public class TrialDivisionServer {
      */
     public void init() throws RemoteException {
         manager = new TrialDivisionManager();
+        manager.setLoopCycleWait(loopCycleWait);
         managerThread = new Thread(manager);
         if (System.getSecurityManager() == null) {
             System.setSecurityManager(new RMISecurityManager());
         }
 
         JobServer stub = (JobServer) UnicastRemoteObject.exportObject(manager, 0);
-        Registry registry = LocateRegistry.getRegistry();
-        registry.rebind("JobServer", stub);
+        Registry registry = LocateRegistry.getRegistry(registryHost, registryPort);
+        registry.rebind(registryServerObject, stub);
         managerThread.start();
     }
 
@@ -108,8 +143,26 @@ public class TrialDivisionServer {
         }
     }
 
-    public static void main(String... args) {
+    public static void main(String... args) throws FileNotFoundException, IOException {
         TrialDivisionServer server = new TrialDivisionServer();
+        
+        Properties props = new Properties(TrialDivisionServer.getDefaultProperties());
+        if (args.length == 1) {
+            //load from user location
+            FileInputStream fin = new FileInputStream(new File(args[0]));
+            props.load(fin);
+        } else {
+            //load from default location
+            File file = new File("server.properties");
+            if (file.exists()) {
+                FileInputStream fin = new FileInputStream(file);
+                props.load(fin);
+            } else {
+                //store defaults to default location (used as template)
+                FileOutputStream fout = new FileOutputStream(file);
+                TrialDivisionServer.getDefaultProperties().store(fout, "default server.properties");
+            }
+        }
         while (true) {
             try {
                 server.init();
