@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -29,6 +30,25 @@ public class JobClient extends UnicastRemoteObject implements Runnable, ClientCa
     private boolean run = true;
     private final int MAX_THREADS;
     private boolean stopJobs = false;
+    
+    private String registryHost = "localhost";
+    private int registryPort = 1099;
+    private String registryServerObject = "JobServer";
+    private long serverRetryWait = 30 * 1000;
+    private long threadJoinWait = 5 * 1000;
+    private long loopCycleWait = 1 * 1000;
+    
+    private static final Properties defaults;
+    
+    static {
+        defaults = new Properties();
+        defaults.setProperty("registryHost", "localhost");
+        defaults.setProperty("registryPort", "1099");
+        defaults.setProperty("registryServerObject", "JobServer");
+        defaults.setProperty("serverRetryWait", Long.valueOf(30 * 1000).toString());
+        defaults.setProperty("threadJoinWait", Long.valueOf(5 * 1000).toString());
+        defaults.setProperty("loopCycleWait", Long.valueOf(1 * 1000).toString());
+    }
 
     private synchronized boolean isStopJobs() {
         return stopJobs;
@@ -41,28 +61,42 @@ public class JobClient extends UnicastRemoteObject implements Runnable, ClientCa
     private synchronized void setStopJobs(boolean stop) {
         this.stopJobs = stop;
     }
-
-    public JobClient() throws RemoteException {
-        this(1);
+    
+    public static Properties getDefaultProperties() {
+        return defaults;
+    }
+    
+    private void useProperties(Properties properties) {
+        registryHost = properties.getProperty("registryHost");
+        registryPort = Integer.valueOf(properties.getProperty("registryPort"));
+        registryServerObject = properties.getProperty("registryServerObject");
+        serverRetryWait = Long.valueOf(properties.getProperty("serverRetryWait"));
+        threadJoinWait = Long.valueOf(properties.getProperty("threadJoinWait"));
+        loopCycleWait = Long.valueOf(properties.getProperty("loopCycleWait"));
     }
 
-    /**
-     * Creates a JobClient that executes jobs in parallel up to maxThreads.
-     *
-     * @param server the job server to use
-     * @param maxThreads how many threads to run.
-     */
-    public JobClient(int maxThreads) throws RemoteException {
+    public JobClient() throws RemoteException {
+        useProperties(defaults);
         setupServer();
-        this.MAX_THREADS = maxThreads;
+        int cores = Runtime.getRuntime().availableProcessors() - 1;
+        this.MAX_THREADS = cores <= 1 ? 1 : cores;
+        threads = new HashMap<UUID, Thread>();
+        jobs = new HashMap<UUID, Job>();
+    }
+
+    public JobClient(Properties properties) throws RemoteException {
+        useProperties(properties);
+        setupServer();
+        int cores = Runtime.getRuntime().availableProcessors() - 1;
+        this.MAX_THREADS = cores <= 1 ? 1 : cores;
         threads = new HashMap<UUID, Thread>();
         jobs = new HashMap<UUID, Job>();
     }
 
     private void setupServer() {
         try {
-            Registry registry = LocateRegistry.getRegistry();
-            JobServer s = (JobServer) registry.lookup("JobServer");
+            Registry registry = LocateRegistry.getRegistry(registryHost, registryPort);
+            JobServer s = (JobServer) registry.lookup(registryServerObject);
             synchronized (this) {
                 server = s;
             }
@@ -88,9 +122,9 @@ public class JobClient extends UnicastRemoteObject implements Runnable, ClientCa
                 Logger.getLogger(JobClient.class.getName()).info("Session id is " + id);
                 return;
             } catch (RemoteException ex) {
-                Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, "Could not get session from server. Waiting 30 secs to try again.", ex);
+                Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, "Could not get session from server. Waiting " + serverRetryWait + " to try again.", ex);
                 try {
-                    Thread.sleep(30 * 1000);
+                    Thread.sleep(serverRetryWait);
                 } catch (InterruptedException ex1) {
                     Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex1);
                 }
@@ -120,9 +154,9 @@ public class JobClient extends UnicastRemoteObject implements Runnable, ClientCa
                     break;
                 }
             } catch (RemoteException ex) {
-                Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, "Could not get Job from server. Waiting 30 secs to reconnect.", ex);
+                Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, "Could not get Job from server. Waiting " + serverRetryWait + " to reconnect.", ex);
                 try {
-                    Thread.sleep(30 * 1000);
+                    Thread.sleep(serverRetryWait);
                 } catch (InterruptedException ex1) {
                     Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex1);
                 }
@@ -147,9 +181,9 @@ public class JobClient extends UnicastRemoteObject implements Runnable, ClientCa
                 Logger.getLogger(JobClient.class.getName()).info("Returned Job " + job);
                 break;
             } catch (RemoteException ex) {
-                Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, "Could not return Job to server. Waiting 30 secs to try again.", ex);
+                Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, "Could not return Job to server. Waiting " + serverRetryWait + " to try again.", ex);
                 try {
-                    Thread.sleep(30 * 1000);
+                    Thread.sleep(serverRetryWait);
                 } catch (InterruptedException ex1) {
                     Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex1);
                 }
@@ -171,7 +205,7 @@ public class JobClient extends UnicastRemoteObject implements Runnable, ClientCa
         j.stop();
         if (t.isAlive()) {
             try {
-                t.join(5 * 1000);
+                t.join(threadJoinWait);
             } catch (InterruptedException ex) {
                 Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex);
             }
@@ -244,7 +278,7 @@ public class JobClient extends UnicastRemoteObject implements Runnable, ClientCa
             Thread t = threads.get(jobID);
             try {
                 if (t.isAlive()) {
-                    t.join(1000);
+                    t.join(threadJoinWait);
                     if (t.isAlive()) {
                         Logger.getLogger(JobClient.class.getName()).severe("Thread for " + jobID + " is complete but still alive. The Job does not implement COMPLETE correctly.");
                     }
@@ -325,8 +359,8 @@ public class JobClient extends UnicastRemoteObject implements Runnable, ClientCa
                 }
                 if (sleep) {
                     try {
-                        Logger.getLogger(JobClient.class.getName()).info("Job loop cycled. Waiting 1 sec.");
-                        Thread.sleep(1 * 1000);
+                        Logger.getLogger(JobClient.class.getName()).info("Job loop cycled. Waiting " + loopCycleWait + ".");
+                        Thread.sleep(loopCycleWait);
                     } catch (InterruptedException ex) {
                         Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex);
                     }
