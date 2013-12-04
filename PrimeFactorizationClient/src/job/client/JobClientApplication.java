@@ -18,7 +18,9 @@ public class JobClientApplication {
             System.setSecurityManager(new RMISecurityManager());
         }
         
-        JobClient client = new JobClient(7);
+        int cores = Runtime.getRuntime().availableProcessors() - 1;
+        
+        JobClient client = new JobClient(cores <= 1 ? 1 : cores);
         client.run();
     }
 }
