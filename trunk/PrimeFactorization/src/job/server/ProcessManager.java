@@ -23,6 +23,7 @@ public abstract class ProcessManager implements JobServer, Runnable {
     protected Map<UUID, Job> expired;
     protected Map<UUID, Session> sessions;
     protected boolean run;
+    private long loopCycleWait = 5 * 60 * 1000;
 
     /**
      * A session tracks every client on this server and the jobs that have been
@@ -48,6 +49,10 @@ public abstract class ProcessManager implements JobServer, Runnable {
     public ProcessManager() {
         expired = new HashMap<UUID, Job>();
         sessions = new HashMap<UUID, Session>();
+    }
+    
+    public void setLoopCycleWait(long time) {
+        this.loopCycleWait = time;
     }
 
     /**
@@ -158,9 +163,9 @@ public abstract class ProcessManager implements JobServer, Runnable {
                     }
                 }
             }
-            Logger.getLogger(ProcessManager.class.getName()).info("ProcessManager loop cycled. Waiting 5 minutes.");
+            Logger.getLogger(ProcessManager.class.getName()).info("ProcessManager loop cycled. Waiting: " + loopCycleWait);
             try {
-                Thread.sleep(5 * 60 * 1000);
+                Thread.sleep(loopCycleWait);
             } catch (InterruptedException ex) {
                 Logger.getLogger(ProcessManager.class.getName()).log(Level.SEVERE, null, ex);
             }
