@@ -37,6 +37,7 @@ public class TrialDivisionServer {
     private int registryPort;
     private String registryServerObject;
     private long loopCycleWait;
+    private File progressFile;
     
     private static final Properties defaults;
     
@@ -46,6 +47,7 @@ public class TrialDivisionServer {
         defaults.setProperty("registryPort", "1099");
         defaults.setProperty("registryServerObject", "JobServer");
         defaults.setProperty("loopCycleWait", Long.valueOf(5 * 60 * 1000).toString());
+        defaults.setProperty("progressFile", "progressFile");
     }
     
     public static Properties getDefaultProperties() {
@@ -57,6 +59,7 @@ public class TrialDivisionServer {
         registryPort = Integer.valueOf(properties.getProperty("registryPort"));
         registryServerObject = properties.getProperty("registryServerObject");
         loopCycleWait = Long.valueOf(properties.getProperty("loopCycleWait"));
+        progressFile = new File(properties.getProperty("progressFile"));
     }
 
     /**
@@ -76,7 +79,7 @@ public class TrialDivisionServer {
      * @throws RemoteException
      */
     public void init() throws RemoteException {
-        manager = new TrialDivisionManager();
+        manager = new TrialDivisionManager(progressFile);
         manager.setLoopCycleWait(loopCycleWait);
         managerThread = new Thread(manager);
         if (System.getSecurityManager() == null) {
@@ -157,10 +160,15 @@ public class TrialDivisionServer {
             if (file.exists()) {
                 FileInputStream fin = new FileInputStream(file);
                 props.load(fin);
+                fin.close();
             } else {
                 //store defaults to default location (used as template)
                 FileOutputStream fout = new FileOutputStream(file);
                 TrialDivisionServer.getDefaultProperties().store(fout, "default server.properties");
+                fout.close();
+                FileInputStream fin = new FileInputStream(file);
+                props.load(fin);
+                fin.close();
             }
         }
         while (true) {
