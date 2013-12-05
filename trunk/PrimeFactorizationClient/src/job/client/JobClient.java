@@ -31,12 +31,12 @@ public class JobClient extends UnicastRemoteObject implements Runnable, ClientCa
     private final int MAX_THREADS;
     private boolean stopJobs = false;
     
-    private String registryHost = "localhost";
-    private int registryPort = 1099;
-    private String registryServerObject = "JobServer";
-    private long serverRetryWait = 30 * 1000;
-    private long threadJoinWait = 5 * 1000;
-    private long loopCycleWait = 1 * 1000;
+    private String registryHost;
+    private int registryPort;
+    private String registryServerObject;
+    private long serverRetryWait;
+    private long threadJoinWait;
+    private long loopCycleWait;
     
     private static final Properties defaults;
     
@@ -77,7 +77,6 @@ public class JobClient extends UnicastRemoteObject implements Runnable, ClientCa
 
     public JobClient() throws RemoteException {
         useProperties(defaults);
-        setupServer();
         int cores = Runtime.getRuntime().availableProcessors() - 1;
         this.MAX_THREADS = cores <= 1 ? 1 : cores;
         threads = new HashMap<UUID, Thread>();
@@ -86,7 +85,6 @@ public class JobClient extends UnicastRemoteObject implements Runnable, ClientCa
 
     public JobClient(Properties properties) throws RemoteException {
         useProperties(properties);
-        setupServer();
         int cores = Runtime.getRuntime().availableProcessors() - 1;
         this.MAX_THREADS = cores <= 1 ? 1 : cores;
         threads = new HashMap<UUID, Thread>();
@@ -95,12 +93,12 @@ public class JobClient extends UnicastRemoteObject implements Runnable, ClientCa
 
     private void setupServer() {
         try {
+            System.out.println(registryHost);
             Registry registry = LocateRegistry.getRegistry(registryHost, registryPort);
-            JobServer s = (JobServer) registry.lookup(registryServerObject);
             synchronized (this) {
-                server = s;
+                server = (JobServer) registry.lookup(registryServerObject);
             }
-            return;
+            System.out.println(registry);
         } catch (RemoteException ex) {
             Logger.getLogger(JobClient.class.getName()).log(Level.SEVERE, null, ex);
         } catch (NotBoundException ex) {
@@ -313,6 +311,7 @@ public class JobClient extends UnicastRemoteObject implements Runnable, ClientCa
      */
     @Override
     public void run() {
+        setupServer();
         session_loop:
         while (isRun()) {
             synchronized (this) {

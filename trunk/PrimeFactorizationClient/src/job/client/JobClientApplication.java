@@ -15,7 +15,7 @@ import java.util.Properties;
 public class JobClientApplication {
 
     public static void main(String... args) throws RemoteException, FileNotFoundException, IOException {
-        Properties props = new Properties(JobClient.getDefaultProperties());
+        Properties props = new Properties();
         if (args.length == 1) {
             //load from user location
             FileInputStream fin = new FileInputStream(new File(args[0]));
@@ -26,12 +26,20 @@ public class JobClientApplication {
             if (file.exists()) {
                 FileInputStream fin = new FileInputStream(file);
                 props.load(fin);
+                fin.close();
             } else {
                 //store defaults to default location (used as template)
                 FileOutputStream fout = new FileOutputStream(file);
                 JobClient.getDefaultProperties().store(fout, "default client.properties");
+                fout.close();
+                FileInputStream fin = new FileInputStream(file);
+                props.load(fin);
+                fin.close();
+                
             }
         }
+        
+        System.out.println(props);
         
         if (System.getSecurityManager() == null) {
             System.setSecurityManager(new RMISecurityManager());
