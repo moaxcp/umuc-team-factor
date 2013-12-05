@@ -1,13 +1,20 @@
 package job.server.factor;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.MathContext;
-import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import job.Job;
 import java.util.UUID;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import job.server.SessionExpiredException;
 
@@ -24,6 +31,104 @@ public class TrialDivisionManager extends FactorizationManager {
     private BigInteger currentNumber;
     private BigInteger nextStart;
     private BigInteger currentMax;
+    private File progressFile;
+
+    public TrialDivisionManager() {
+    }
+
+    public TrialDivisionManager(File progressFile) {
+        this.progressFile = progressFile;
+        readProgress();
+    }
+
+    private synchronized void readProgress() {
+        if (progressFile.exists()) {
+            //temporary variables.
+            Map<UUID, Job> expired = null;
+            FactorTree solution = null;
+            BigInteger currentNumber = null;
+            BigInteger nextStart = null;
+            BigInteger currentMax = null;
+            boolean read = false;
+            //read into temps
+            try {
+                ObjectInputStream in = new ObjectInputStream(new FileInputStream(progressFile));
+                expired = (Map<UUID, Job>) in.readObject();
+                solution = (FactorTree) in.readObject();
+                currentNumber = (BigInteger) in.readObject();
+                nextStart = (BigInteger) in.readObject();
+                currentMax = (BigInteger) in.readObject();
+                in.close();
+                read = true;
+            } catch (IOException ex) {
+                Logger.getLogger(TrialDivisionManager.class.getName()).log(Level.SEVERE, null, ex);
+            } catch (ClassNotFoundException ex) {
+                Logger.getLogger(TrialDivisionManager.class.getName()).log(Level.SEVERE, null, ex);
+            }
+            //if no exceptions write into member variables.
+            if (read) {
+                this.expired = expired;
+                this.solution = solution;
+                this.currentNumber = currentNumber;
+                this.nextStart = nextStart;
+                this.currentMax = currentMax;
+            }
+        }
+    }
+
+    private synchronized void writeProgress() {
+        try {
+            ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(progressFile));
+            out.writeObject(expired);
+            out.writeObject(solution);
+            out.writeObject(currentNumber);
+
+            //find lowest start but only in issued jobs
+            BigInteger lowestStart = nextStart;
+            for (UUID i : sessions.keySet()) {
+                Session s2 = sessions.get(i);
+                for (UUID j : s2.jobs.keySet()) {
+                    TrialDivisionJob k = (TrialDivisionJob) s2.jobs.get(j);
+                    if (currentNumber.equals(k.getNumber())) {
+                        if (k.getStart().compareTo(lowestStart) < 0) {
+                            lowestStart = k.getStart();
+                        }
+                    }
+                }
+            }
+
+            out.writeObject(lowestStart);
+            out.writeObject(currentMax);
+            out.close();
+        } catch (IOException ex) {
+            Logger.getLogger(TrialDivisionManager.class.getName()).log(Level.SEVERE, null, ex);
+        }
+    }
+
+    private synchronized BigInteger getLowestStart() {
+        //find the current lowest start being worked on.
+        BigInteger lowestStart = nextStart;
+        for (UUID i : expired.keySet()) {
+            TrialDivisionJob j = (TrialDivisionJob) expired.get(i);
+            if (currentNumber.equals(j.getNumber())) {
+                if (j.getStart().compareTo(lowestStart) < 0) {
+                    lowestStart = j.getStart();
+                }
+            }
+        }
+        for (UUID i : sessions.keySet()) {
+            Session s2 = sessions.get(i);
+            for (UUID j : s2.jobs.keySet()) {
+                TrialDivisionJob k = (TrialDivisionJob) s2.jobs.get(j);
+                if (currentNumber.equals(k.getNumber())) {
+                    if (k.getStart().compareTo(lowestStart) < 0) {
+                        lowestStart = k.getStart();
+                    }
+                }
+            }
+        }
+        return lowestStart;
+    }
 
     /**
      * @param currentNumber the currentNumber to test with TrialDivisionJobs
@@ -35,40 +140,26 @@ public class TrialDivisionManager extends FactorizationManager {
         Logger.getLogger(TrialDivisionManager.class.getName()).info("set currentNumber to " + currentNumber + ", nextStart to " + nextStart + ", currentMax to " + currentMax);
 
     }
-    
+
     public synchronized BigInteger getCurrentNumber() {
         return currentNumber;
     }
 
     /**
      * return the percentage complete for the current number.
-     * @return 
+     *
+     * @return
      */
     public synchronized BigDecimal currenNumberPercentComplete() {
-        BigInteger value = nextStart;
-        for (UUID session : sessions.keySet()) {
-            Session s = sessions.get(session);
-            for (UUID job : s.jobs.keySet()) {
-                TrialDivisionJob j = (TrialDivisionJob) s.jobs.get(job);
-                if (j.getStart().compareTo(value) < 0) {
-                    value = j.getStart();
-                }
-            }
-        }
-        for (UUID job : expired.keySet()) {
-            TrialDivisionJob j = (TrialDivisionJob) expired.get(job);
-            if (j.getStart().compareTo(value) < 0) {
-                value = j.getStart();
-            }
-        }
-        return new BigDecimal(value).divide(new BigDecimal(currentMax), MathContext.DECIMAL32).multiply(BigDecimal.valueOf(100));
+        return new BigDecimal(getLowestStart()).divide(new BigDecimal(currentMax), MathContext.DECIMAL32).multiply(BigDecimal.valueOf(100));
 
     }
 
     /**
      * return the square root of BigInteger x.
+     *
      * @param x
-     * @return 
+     * @return
      */
     //from http://stackoverflow.com/a/11962756
     private static BigInteger sqrt(BigInteger x) {
@@ -91,7 +182,8 @@ public class TrialDivisionManager extends FactorizationManager {
 
     /**
      * Sets the current problem the server should work on.
-     * @param number 
+     *
+     * @param number
      */
     public synchronized void setNumber(BigInteger number) {
         super.setNumber(number);
@@ -100,14 +192,15 @@ public class TrialDivisionManager extends FactorizationManager {
 
     /**
      * returns the next job to be worked on to a JobClient.
+     *
      * @param id
-     * @return 
+     * @return
      */
     @Override
     public synchronized Job getNextJob(UUID id) throws SessionExpiredException {
-        
+
         Session s = sessions.get(id);
-        if(s == null) {
+        if (s == null) {
             Logger.getLogger(TrialDivisionManager.class.getName()).info("session does not exist " + id);
             throw new SessionExpiredException("session does not exist " + id);
         }
@@ -148,8 +241,8 @@ public class TrialDivisionManager extends FactorizationManager {
     }
 
     /**
-     * sets up the next next number to be factored. This is called when a solution
-     * is found in returnJob.
+     * sets up the next next number to be factored. This is called when a
+     * solution is found in returnJob.
      */
     private synchronized void setupNextNumber() {
         BigInteger nextNumber = solution.getNextUnsolvedNumber();
@@ -160,6 +253,10 @@ public class TrialDivisionManager extends FactorizationManager {
         }
         if (nextNumber != null) {
             setCurrentNumber(nextNumber);
+        } else {
+            if(progressFile.exists()) {
+                progressFile.delete();
+            }
         }
 
         List<UUID> remove = new ArrayList<UUID>();
@@ -190,8 +287,9 @@ public class TrialDivisionManager extends FactorizationManager {
 
     /**
      * called by a client when a job is being returned.
+     *
      * @param id
-     * @param job 
+     * @param job
      */
     @Override
     public synchronized void returnJob(UUID id, Job job) throws SessionExpiredException {
@@ -199,7 +297,7 @@ public class TrialDivisionManager extends FactorizationManager {
 
         //remove job from session.
         Session s = sessions.get(id);
-        if(s == null) {
+        if (s == null) {
             Logger.getLogger(TrialDivisionManager.class.getName()).info("session does not exist " + id);
             throw new SessionExpiredException("session does not exist " + id);
         }
@@ -246,6 +344,6 @@ public class TrialDivisionManager extends FactorizationManager {
         } else {
             Logger.getLogger(TrialDivisionManager.class.getName()).info("returned job with no solution. " + complete);
         }
-
+        writeProgress();
     }
 }
