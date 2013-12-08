@@ -50,7 +50,7 @@ public abstract class ProcessManager implements JobServer, Runnable {
         expired = new HashMap<UUID, Job>();
         sessions = new HashMap<UUID, Session>();
     }
-    
+
     public void setLoopCycleWait(long time) {
         this.loopCycleWait = time;
     }
@@ -110,16 +110,8 @@ public abstract class ProcessManager implements JobServer, Runnable {
             try {
                 Logger.getLogger(ProcessManager.class.getName()).info("Stopping jobs for " + session);
                 s.client.stopJobs();
-                for (UUID jobid : s.jobs.keySet()) {
-                    Job j = s.jobs.get(jobid);
-                    expired.put(jobid, j);
-                }
             } catch (RemoteException ex) {
-                try {
-                    endSession(session);
-                } catch (SessionExpiredException ex1) {
-                    Logger.getLogger(ProcessManager.class.getName()).log(Level.SEVERE, null, ex1);
-                }
+                Logger.getLogger(ProcessManager.class.getName()).log(Level.SEVERE, null, ex);
             }
         }
     }
@@ -147,7 +139,7 @@ public abstract class ProcessManager implements JobServer, Runnable {
                     try {
                         ClientStatus status = c.status();
                         Logger.getLogger(ProcessManager.class.getName()).info("got client status for " + id + ": " + status.getSessionID() + " -" + status.getJobStatus());
-                        if(status.getSessionID() == null || !status.getSessionID().equals(id)) {
+                        if (status.getSessionID() == null || !status.getSessionID().equals(id)) {
                             endSessions.add(id);
                         }
                     } catch (Exception ex) {
