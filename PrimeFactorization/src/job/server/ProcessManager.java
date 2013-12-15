@@ -4,12 +4,14 @@ import job.Job;
 import job.client.ClientCallback;
 import java.rmi.RemoteException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import job.StopWatch;
 import job.client.ClientStatus;
 
 /**
@@ -22,8 +24,9 @@ public abstract class ProcessManager implements JobServer, Runnable {
 
     protected Map<UUID, Job> expired;
     protected Map<UUID, Session> sessions;
-    protected boolean run;
-    private long loopCycleWait = 5 * 60 * 1000;
+    private boolean run;
+    private boolean stopJobs;
+    private long sessionExpireTime = 5 * 60 * 1000;
 
     /**
      * A session tracks every client on this server and the jobs that have been
@@ -51,8 +54,16 @@ public abstract class ProcessManager implements JobServer, Runnable {
         sessions = new HashMap<UUID, Session>();
     }
 
-    public void setLoopCycleWait(long time) {
-        this.loopCycleWait = time;
+    public synchronized boolean isStopJobs() {
+        return stopJobs;
+    }
+
+    public synchronized void setStopJobs(boolean stop) {
+        this.stopJobs = stop;
+    }
+
+    public synchronized void setSessionExpireTime(long time) {
+        this.sessionExpireTime = time;
     }
 
     /**
@@ -105,15 +116,7 @@ public abstract class ProcessManager implements JobServer, Runnable {
      * stops jobs on all clients.
      */
     protected synchronized void stopJobs() {
-        for (UUID session : sessions.keySet()) {
-            Session s = sessions.get(session);
-            try {
-                Logger.getLogger(ProcessManager.class.getName()).info("Stopping jobs for " + session);
-                s.client.stopJobs();
-            } catch (RemoteException ex) {
-                Logger.getLogger(ProcessManager.class.getName()).log(Level.SEVERE, null, ex);
-            }
-        }
+        stopJobs = true;
     }
 
     /**
@@ -131,11 +134,20 @@ public abstract class ProcessManager implements JobServer, Runnable {
     public void run() {
         run = true;
 
+        StopWatch sessionWatch = new StopWatch();
+        sessionWatch.start();
+
         while (run) {
-            synchronized (this) {
+            if (sessionWatch.getTime() > sessionExpireTime * 1000000) {
+                sessionWatch.reset();
+                Map<UUID, Session> copy = new HashMap<UUID, Session>();
+                synchronized (this) {
+                    copy = Collections.unmodifiableMap(sessions);
+                }
+
                 List<UUID> endSessions = new ArrayList<UUID>();
-                for (UUID id : sessions.keySet()) {
-                    ClientCallback c = sessions.get(id).client;
+                for (UUID id : copy.keySet()) {
+                    ClientCallback c = copy.get(id).client;
                     try {
                         ClientStatus status = c.status();
                         Logger.getLogger(ProcessManager.class.getName()).info("got client status for " + id + ": " + status.getSessionID() + " -" + status.getJobStatus());
@@ -155,9 +167,27 @@ public abstract class ProcessManager implements JobServer, Runnable {
                     }
                 }
             }
-            Logger.getLogger(ProcessManager.class.getName()).info("ProcessManager loop cycled. Waiting: " + loopCycleWait);
+
+            if (isStopJobs()) {
+                List<ClientCallback> clients = new ArrayList<ClientCallback>();
+                synchronized (this) {
+                    for (UUID session : sessions.keySet()) {
+                        Session s = sessions.get(session);
+                        Logger.getLogger(ProcessManager.class.getName()).info("Will stop jobs for " + session);
+                        clients.add(s.client);
+                    }
+                }
+                for (ClientCallback c : clients) {
+                    try {
+                        c.stopJobs();
+                    } catch (RemoteException ex) {
+                        Logger.getLogger(ProcessManager.class.getName()).log(Level.SEVERE, null, ex);
+                    }
+                }
+                setStopJobs(false);
+            }
             try {
-                Thread.sleep(loopCycleWait);
+                Thread.sleep(200);
             } catch (InterruptedException ex) {
                 Logger.getLogger(ProcessManager.class.getName()).log(Level.SEVERE, null, ex);
             }
