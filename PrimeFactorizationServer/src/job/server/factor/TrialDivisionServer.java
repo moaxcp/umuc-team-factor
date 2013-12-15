@@ -23,6 +23,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import job.StopWatch;
 import job.server.JobServer;
 
 /**
@@ -36,8 +37,9 @@ public class TrialDivisionServer {
     private String registryHost;
     private int registryPort;
     private String registryServerObject;
-    private long loopCycleWait;
+    private long sessionExpireTime;
     private File progressFile;
+    private StopWatch watch;
     
     private static final Properties defaults;
     
@@ -46,7 +48,7 @@ public class TrialDivisionServer {
         defaults.setProperty("registryHost", "localhost");
         defaults.setProperty("registryPort", "1099");
         defaults.setProperty("registryServerObject", "JobServer");
-        defaults.setProperty("loopCycleWait", Long.valueOf(5 * 60 * 1000).toString());
+        defaults.setProperty("sessionExpireTime", Long.valueOf(5 * 60 * 1000).toString());
         defaults.setProperty("progressFile", "progressFile");
     }
     
@@ -58,7 +60,7 @@ public class TrialDivisionServer {
         registryHost = properties.getProperty("registryHost");
         registryPort = Integer.valueOf(properties.getProperty("registryPort"));
         registryServerObject = properties.getProperty("registryServerObject");
-        loopCycleWait = Long.valueOf(properties.getProperty("loopCycleWait"));
+        sessionExpireTime = Long.valueOf(properties.getProperty("sessionExpireTime"));
         progressFile = new File(properties.getProperty("progressFile"));
     }
 
@@ -66,11 +68,25 @@ public class TrialDivisionServer {
      * creates a trial division server.
      */
     public TrialDivisionServer() {
+        watch = new StopWatch();
         useProperties(defaults);
     }
     
     public TrialDivisionServer(Properties properties) {
+        watch = new StopWatch();
         useProperties(properties);
+    }
+    
+    public void printResults() {
+        System.out.println("Factors are " + manager.getSolution().getLeaves());
+        Map<BigInteger, StopWatch> times = manager.getTimes();
+        StopWatch jobWatch = new StopWatch();
+        for(BigInteger bi : times.keySet()) {
+            jobWatch.setTime(jobWatch.getTime() + times.get(bi).getTime());
+        }
+        System.out.println("Times: " + manager.getTimes());
+        System.out.println("Total job time: " + jobWatch);
+        System.out.println("Total problem time: " + watch);
     }
 
     /**
@@ -79,8 +95,11 @@ public class TrialDivisionServer {
      * @throws RemoteException
      */
     public void init() throws RemoteException {
+        if(progressFile.exists()) {
+            progressFile.delete();
+        }
         manager = new TrialDivisionManager(progressFile);
-        manager.setLoopCycleWait(loopCycleWait);
+        manager.setSessionExpireTime(sessionExpireTime);
         managerThread = new Thread(manager);
         if (System.getSecurityManager() == null) {
             System.setSecurityManager(new RMISecurityManager());
@@ -113,17 +132,20 @@ public class TrialDivisionServer {
                     Logger.getLogger(TrialDivisionServer.class.getName()).log(Level.SEVERE, null, ex);
                     continue;
                 }
+                watch = new StopWatch();
+                watch.start();
                 BigDecimal percent = manager.currenNumberPercentComplete();
                 while (true) {
                     synchronized (manager) {
                         if (manager.getSolution().isComplete()) {
+                            watch.stop();
                             break;
                         }
                         BigDecimal next = manager.currenNumberPercentComplete();
                         if (!percent.equals(next)) {
                             percent = next;
                             System.out.println("Working on " + manager.getCurrentNumber() + "... " + manager.currenNumberPercentComplete() + "%");
-                            System.out.println("factors so far: " + manager.getSolution().getLeaves());
+                            printResults();
                         }
                     }
                     try {
@@ -135,7 +157,7 @@ public class TrialDivisionServer {
                 synchronized (manager) {
                     FactorTree solution = manager.getSolution();
                     Map<BigInteger, Integer> leaves = solution.getLeaves();
-                    System.out.println("Factors for " + solution.getNumber() + " are: " + leaves);
+                    printResults();
                     for (BigInteger bi : leaves.keySet()) {
                         if (solution.isPrime(bi)) {
                             System.out.println(bi + " is prime.");
