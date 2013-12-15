@@ -43,6 +43,7 @@ public class StopWatch implements Serializable {
     public synchronized void stop() {
         if(running) {
             time += System.nanoTime() - current;
+            current = System.nanoTime();
         }
         running = false;
     }
@@ -63,6 +64,7 @@ public class StopWatch implements Serializable {
     public synchronized long getTime() {
         if(running) {
             time += System.nanoTime() - current;
+            current = System.nanoTime();
         }
         return time;
     }
@@ -94,9 +96,9 @@ public class StopWatch implements Serializable {
         String shours = (hours < 10 ? "0" + hours : ("" + hours)) + ":";
         String sminutes = (minutes < 10 ? "0" + minutes : "" + minutes) + ":";
         String sseconds = (seconds < 10 ? "0" + seconds : "" + seconds) + ":";
-        String smilli = (milli < 100 ? milli < 10 ? "00" + milli : "0" + milli : "" + milli) + ":";
+        String smilli = (milli < 100 ? milli < 10 ? "00" + milli : "0" + milli : "" + milli);
         String snano = nano < 100000 ? nano < 10000 ? nano < 1000 ? nano < 100 ? nano < 10 ? "00000" + nano : "0000" + nano : "000" + nano : "00" + nano : "0" + nano : "" + nano;
-        String postfix = days >= 1 ? "day" : hours >= 1 ? "hour" : minutes >= 1 ? "min" : seconds >= 1 ? "sec" : milli >= 1 ? "milli" : nano >= 1 ? "nano" : "";
-        return (days == 0 ? "" : sdays) + (days == 0 && hours == 0 ? "" : shours) + (days == 0 && hours == 0 && minutes == 0 ? "" : sminutes) + (days == 0 && hours == 0 && minutes == 0 && seconds == 0 ? "" : sseconds) + (days == 0 && hours == 0 && minutes == 0 && seconds == 0 && milli == 0 ? "" : smilli) + snano + " " + postfix;
+        String postfix = days >= 1 ? "day" : hours >= 1 ? "hr" : minutes >= 1 ? "mn" : seconds >= 1 ? "s" : milli >= 1 ? "ms" : nano >= 1 ? "ns" : "";
+        return (days == 0 ? "" : sdays) + (days == 0 && hours == 0 ? "" : shours) + (days == 0 && hours == 0 && minutes == 0 ? "" : sminutes) + (days == 0 && hours == 0 && minutes == 0 && seconds == 0 ? "" : sseconds) + (days == 0 && hours == 0 && minutes == 0 && seconds == 0 && milli == 0 ? "" : smilli) + (milli == 0 ? snano : "") + " " + postfix;
     }
 }
