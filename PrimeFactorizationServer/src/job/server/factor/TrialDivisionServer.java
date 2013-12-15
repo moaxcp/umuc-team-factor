@@ -40,9 +40,9 @@ public class TrialDivisionServer {
     private long sessionExpireTime;
     private File progressFile;
     private StopWatch watch;
-    
     private static final Properties defaults;
-    
+    private boolean useProgress;
+
     static {
         defaults = new Properties();
         defaults.setProperty("registryHost", "localhost");
@@ -51,11 +51,11 @@ public class TrialDivisionServer {
         defaults.setProperty("sessionExpireTime", Long.valueOf(5 * 60 * 1000).toString());
         defaults.setProperty("progressFile", "progressFile");
     }
-    
+
     public static Properties getDefaultProperties() {
         return defaults;
     }
-    
+
     private void useProperties(Properties properties) {
         registryHost = properties.getProperty("registryHost");
         registryPort = Integer.valueOf(properties.getProperty("registryPort"));
@@ -71,17 +71,18 @@ public class TrialDivisionServer {
         watch = new StopWatch();
         useProperties(defaults);
     }
-    
+
     public TrialDivisionServer(Properties properties) {
         watch = new StopWatch();
         useProperties(properties);
     }
-    
+
     public void printResults() {
+        System.out.println("Number: " + manager.getSolution().getNumber());
         System.out.println("Factors are " + manager.getSolution().getLeaves());
         Map<BigInteger, StopWatch> times = manager.getTimes();
         StopWatch jobWatch = new StopWatch();
-        for(BigInteger bi : times.keySet()) {
+        for (BigInteger bi : times.keySet()) {
             jobWatch.setTime(jobWatch.getTime() + times.get(bi).getTime());
         }
         System.out.println("Times: " + manager.getTimes());
@@ -95,10 +96,31 @@ public class TrialDivisionServer {
      * @throws RemoteException
      */
     public void init() throws RemoteException {
-        if(progressFile.exists()) {
-            progressFile.delete();
+        if (progressFile.exists()) {
+            manager = new TrialDivisionManager(progressFile);
+            System.out.println(manager.getSolution().getNumber());
+            while (true) {
+                System.out.println("Found progress for previous problem. Would you like to continue problem? (yes/no)");
+                BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+                try {
+                    String s = br.readLine();
+                    if (s.equals("no")) {
+                        progressFile.delete();
+                        manager = new TrialDivisionManager(progressFile);
+                        break;
+                    } else if (s.equals("yes")) {
+                        useProgress = true;
+                        break;
+                    } else {
+                        System.out.println("Please enter yes or no.");
+                    }
+                } catch (IOException ex) {
+                    Logger.getLogger(TrialDivisionServer.class.getName()).log(Level.SEVERE, null, ex);
+                }
+            }
+        } else {
+            manager = new TrialDivisionManager(progressFile);
         }
-        manager = new TrialDivisionManager(progressFile);
         manager.setSessionExpireTime(sessionExpireTime);
         managerThread = new Thread(manager);
         if (System.getSecurityManager() == null) {
@@ -120,18 +142,21 @@ public class TrialDivisionServer {
             BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
             NumberFormat nf = NumberFormat.getInstance();
             while (true) {
-                System.out.println("Please enter a positive number: ");
-                try {
-                    String s = br.readLine();
-                    BigInteger number = new BigInteger(s);
-                    manager.setNumber(number);
-                } catch (IOException ex) {
-                    Logger.getLogger(TrialDivisionServer.class.getName()).log(Level.SEVERE, null, ex);
-                    continue;
-                } catch (NumberFormatException ex) {
-                    Logger.getLogger(TrialDivisionServer.class.getName()).log(Level.SEVERE, null, ex);
-                    continue;
+                if (!useProgress) {
+                    System.out.println("Please enter a positive number: ");
+                    try {
+                        String s = br.readLine();
+                        BigInteger number = new BigInteger(s);
+                        manager.setNumber(number);
+                    } catch (IOException ex) {
+                        Logger.getLogger(TrialDivisionServer.class.getName()).log(Level.SEVERE, null, ex);
+                        continue;
+                    } catch (NumberFormatException ex) {
+                        Logger.getLogger(TrialDivisionServer.class.getName()).log(Level.SEVERE, null, ex);
+                        continue;
+                    }
                 }
+                useProgress = false;
                 watch = new StopWatch();
                 watch.start();
                 BigDecimal percent = manager.currenNumberPercentComplete();
@@ -163,6 +188,7 @@ public class TrialDivisionServer {
                             System.out.println(bi + " is prime.");
                         }
                     }
+                    progressFile.delete();
                 }
             }
         }
@@ -170,7 +196,7 @@ public class TrialDivisionServer {
 
     public static void main(String... args) throws FileNotFoundException, IOException {
         TrialDivisionServer server = new TrialDivisionServer();
-        
+
         Properties props = new Properties(TrialDivisionServer.getDefaultProperties());
         if (args.length == 1) {
             //load from user location

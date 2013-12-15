@@ -1,0 +1,1 @@
+java -Djava.rmi.server.codebase="ftp://192.168.1.62/PrimeFactorization.jar ftp://192.168.1.62/PrimeFactorizationServer.jar" -Djava.rmi.server.useCodebaseOnly=false -Djava.rmi.server.hostname=192.168.1.62 -Djava.security.policy=server.policy -jar PrimeFactorizationServer.jar

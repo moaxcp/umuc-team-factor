@@ -190,6 +190,8 @@ public class EliminateDivisors {
             counter += 1;
             currentl += 1;
         }
+        
+        
         //printLine(number, line);
         //printLine(number, counts);
         int countSize = counts.size();
