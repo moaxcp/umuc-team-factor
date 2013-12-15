@@ -37,10 +37,6 @@ public class TrialDivisionManager extends FactorizationManager {
     private File progressFile;
     private Map<BigInteger, StopWatch> times;
 
-    public TrialDivisionManager() {
-        times = new HashMap<BigInteger, StopWatch>();
-    }
-
     public TrialDivisionManager(File progressFile) {
         this.progressFile = progressFile;
         readProgress();

@@ -1,6 +1,7 @@
 package musings;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.math.BigDecimal;
@@ -29,7 +30,7 @@ public class GeneratePrimes {
     private Thread managerThread;
 
     public GeneratePrimes() {
-        manager = new TrialDivisionManager();
+        manager = new TrialDivisionManager(new File("progressFile"));
         managerThread = new Thread(manager);
 
     }
