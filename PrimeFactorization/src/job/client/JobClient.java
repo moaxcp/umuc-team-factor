@@ -233,6 +233,7 @@ public class JobClient extends UnicastRemoteObject implements Runnable, ClientCa
      * @return
      */
     private synchronized boolean fillJobs() {
+        int added = 0;
         while (jobs.keySet().size() < MAX_THREADS) {
             Job j;
             try {
@@ -247,14 +248,15 @@ public class JobClient extends UnicastRemoteObject implements Runnable, ClientCa
                 jobs.put(j.getId(), j);
                 threads.put(j.getId(), t);
                 t.start();
+                added++;
             } else {
                 break;
             }
         }
-        if(threads.size() > 0) {
-            Logger.getLogger(JobClient.class.getName()).info("There are " + threads.size() + " threads.");
+        if(added > 0) {
+            Logger.getLogger(JobClient.class.getName()).info("Started " + added + " threads.");
         } else {
-            Logger.getLogger(JobClient.class.getName()).fine("There are " + threads.size() + " threads.");
+            Logger.getLogger(JobClient.class.getName()).fine("Started " + added + " threads.");
         }
         return false;
     }
