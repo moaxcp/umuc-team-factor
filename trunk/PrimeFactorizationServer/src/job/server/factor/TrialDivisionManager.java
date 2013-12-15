@@ -10,12 +10,15 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.MathContext;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import job.Job;
 import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import job.StopWatch;
 import job.server.SessionExpiredException;
 
 /*
@@ -32,13 +35,20 @@ public class TrialDivisionManager extends FactorizationManager {
     private BigInteger nextStart;
     private BigInteger currentMax;
     private File progressFile;
+    private Map<BigInteger, StopWatch> times;
 
     public TrialDivisionManager() {
+        times = new HashMap<BigInteger, StopWatch>();
     }
 
     public TrialDivisionManager(File progressFile) {
         this.progressFile = progressFile;
         readProgress();
+        times = new HashMap<BigInteger, StopWatch>();
+    }
+    
+    public synchronized Map<BigInteger, StopWatch> getTimes() {
+        return Collections.unmodifiableMap(times);
     }
 
     private synchronized void readProgress() {
@@ -188,6 +198,7 @@ public class TrialDivisionManager extends FactorizationManager {
     public synchronized void setNumber(BigInteger number) {
         super.setNumber(number);
         setCurrentNumber(number);
+        times = new HashMap<BigInteger, StopWatch>();
     }
 
     /**
@@ -207,7 +218,12 @@ public class TrialDivisionManager extends FactorizationManager {
 
         //solution found. waiting for next problem.
         if (solution == null || solution.isComplete()) {
-            Logger.getLogger(TrialDivisionManager.class.getName()).info("waiting for next problem.");
+            Logger.getLogger(TrialDivisionManager.class.getName()).fine("waiting for next problem.");
+            return null;
+        }
+        
+        if(isStopJobs()) {
+            Logger.getLogger(TrialDivisionManager.class.getName()).fine("Returning null. Waiting for jobs to stop.");
             return null;
         }
 
@@ -216,7 +232,7 @@ public class TrialDivisionManager extends FactorizationManager {
             Job j = expired.get(expired.keySet().iterator().next());
             expired.remove(j.getId());
             addJob(id, j);
-            Logger.getLogger(TrialDivisionManager.class.getName()).info("Using expired job. " + j);
+            Logger.getLogger(TrialDivisionManager.class.getName()).info("Using expired job. " + j + " for " + id);
             return j;
         }
 
@@ -236,7 +252,7 @@ public class TrialDivisionManager extends FactorizationManager {
 
         //set next start for next job created.
         nextStart = end;
-        Logger.getLogger(TrialDivisionManager.class.getName()).info("created " + j);
+        Logger.getLogger(TrialDivisionManager.class.getName()).info("created " + j + " for " + id);
         return j;
     }
 
@@ -257,6 +273,7 @@ public class TrialDivisionManager extends FactorizationManager {
             if(progressFile.exists()) {
                 progressFile.delete();
             }
+            Logger.getLogger(TrialDivisionManager.class.getName()).info("nextNumber is null. Solution is " + solution.getLeaves());
         }
 
         List<UUID> remove = new ArrayList<UUID>();
@@ -305,7 +322,7 @@ public class TrialDivisionManager extends FactorizationManager {
 
         //ignore returning old jobs.
         if (!complete.getNumber().equals(currentNumber)) {
-            Logger.getLogger(TrialDivisionManager.class.getName()).info("returned old job " + complete);
+            Logger.getLogger(TrialDivisionManager.class.getName()).info("returned old job " + complete + " for " + id);
             return;
         }
 
@@ -333,17 +350,24 @@ public class TrialDivisionManager extends FactorizationManager {
         //must be prime.
         if (complete.getLeftFactor() != null && complete.getRightFactor() != null) {
             solution.setFactors(complete.getNumber(), complete.getLeftFactor(), complete.getRightFactor());
-            Logger.getLogger(TrialDivisionManager.class.getName()).info("returned solution " + complete);
+            Logger.getLogger(TrialDivisionManager.class.getName()).info("returned solution " + complete + " from " + id);
             stopJobs();
             setupNextNumber();
         } else if (nextStart.equals(currentMax) && issuedJobs == 0) {
             solution.setPrime(currentNumber, true);
-            Logger.getLogger(TrialDivisionManager.class.getName()).info("returned last job found " + currentNumber + " is prime. " + complete);
+            Logger.getLogger(TrialDivisionManager.class.getName()).info("returned last job found " + currentNumber + " is prime. " + complete + " from " + id);
             stopJobs();
             setupNextNumber();
         } else {
-            Logger.getLogger(TrialDivisionManager.class.getName()).info("returned job with no solution. " + complete);
+            Logger.getLogger(TrialDivisionManager.class.getName()).info("returned job with no solution. " + complete + " from " + id);
         }
+        
+        StopWatch watch = times.get(complete.getNumber());
+        if(watch == null) {
+            watch = new StopWatch();
+        }
+        watch.setTime(watch.getTime() + complete.getTime());
+        times.put(complete.getNumber(), watch);
         writeProgress();
     }
 }
