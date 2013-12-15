@@ -70,7 +70,6 @@ public class TrialDivisionJob extends FactorizationJob {
 
     @Override
     public void run() {
-        System.out.println("Starting " + number + " from " + start + " to " + end + ".");
         synchronized (this) {
             if (status != JobStatus.NEW) {
                 return;
@@ -78,25 +77,37 @@ public class TrialDivisionJob extends FactorizationJob {
             status = JobStatus.RUNNING;
             watch.start();
         }
+        
+        Wheel wheel = Wheel.getWheel();
+        
+        //find wheel start
+        BigInteger i = start;
+        BigInteger multiplier = start.subtract(BigInteger.valueOf(wheel.getPrime() + wheel.getStartAdd())).divide(BigInteger.valueOf(wheel.getLength())).add(BigInteger.ONE);
+        BigInteger patternStart = BigInteger.valueOf(wheel.getPrime() + wheel.getStartAdd()).add(multiplier.multiply(BigInteger.valueOf(wheel.getLength())));
+        
+        for (;; i = i.add(BigInteger.ONE)) {
+            synchronized (this) {
+                if (status != JobStatus.RUNNING) {
+                    watch.stop();
+                    return;
+                }
 
-        //check start is odd
-        synchronized (this) {
-            if (start.equals(BigInteger.valueOf(2)) && divide(start)) {
-                status = JobStatus.COMPLETE;
-                watch.stop();
-                return;
+                if (i.compareTo(end) >= 0) {
+                    status = JobStatus.COMPLETE;
+                    watch.stop();
+                    return;
+                }
+                if (divide(i)) {
+                    status = JobStatus.COMPLETE;
+                    watch.stop();
+                    return;
+                } else if(i.compareTo(patternStart) == 0) {
+                    break;
+                }
             }
         }
-
-        //check all odd
-        BigInteger i = null;
-        synchronized (this) {
-            if (start.mod(BigInteger.valueOf(2)).equals(BigInteger.ZERO)) {
-                start = start.add(BigInteger.ONE);
-            }
-            i = start;
-        }
-        for (;; i = i.add(BigInteger.valueOf(2))) {
+        
+        for (int j = 0;; i = i.add(BigInteger.valueOf(wheel.getPattern()[j])), j++) {
             synchronized (this) {
                 if (status != JobStatus.RUNNING) {
                     watch.stop();
@@ -113,12 +124,15 @@ public class TrialDivisionJob extends FactorizationJob {
                     watch.stop();
                     return;
                 }
+                if(j >= wheel.getPattern().length) {
+                    j = 0;
+                }
             }
         }
     }
 
     @Override
     public synchronized String toString() {
-        return "TrialDivisionJob " + status + " from " + start + " to " + end + " number:" + number + " = " + leftFactor + " * " + rightFactor;
+        return "TrialDivisionJob " + status + " in " + watch + " from " + start + " to " + end + " number:" + number + " = " + leftFactor + " * " + rightFactor;
     }
 }
