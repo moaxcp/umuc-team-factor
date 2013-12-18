@@ -249,6 +249,7 @@ public class TrialDivisionManager extends FactorizationManager {
         //set next start for next job created.
         nextStart = end;
         Logger.getLogger(TrialDivisionManager.class.getName()).info("created " + j + " for " + id);
+        addJob(id, j);
         return j;
     }
 
